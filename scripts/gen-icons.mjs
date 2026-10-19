@@ -1,0 +1,126 @@
+// Erzeugt src/components/icons/paths.ts aus Material Symbols Rounded (Apache 2.0).
+// Nur die tatsächlich genutzten Icons landen im Bundle. Aufruf: node scripts/gen-icons.mjs
+import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+const src = join(root, 'node_modules/@material-symbols/svg-400/rounded')
+
+// Name in der App → [Material-Name, gefüllt?]
+const icons = {
+  home: ['home', true],
+  route: ['route', false],
+  barChart: ['bar_chart', true],
+  settings: ['settings', false],
+  settingsFill: ['settings', true],
+  chevronRight: ['chevron_right', false],
+  chevronLeft: ['arrow_back_ios_new', false],
+  arrowDown: ['keyboard_arrow_down', false],
+  arrowUp: ['keyboard_arrow_up', false],
+  close: ['close', false],
+  moreVert: ['more_vert', false],
+  moreHoriz: ['more_horiz', false],
+  info: ['info', false],
+  schedule: ['schedule', false],
+  person: ['accessibility_new', false],
+  swap: ['swap_horiz', false],
+  thermostat: ['device_thermostat', true],
+  location: ['location_on', true],
+  batteryBolt: ['battery_android_bolt', true],
+  batteryFull: ['battery_android_full', true],
+  battery0: ['battery_android_0', false],
+  battery1: ['battery_android_1', false],
+  battery2: ['battery_android_2', false],
+  battery3: ['battery_android_3', false],
+  battery4: ['battery_android_4', false],
+  battery5: ['battery_android_5', false],
+  battery6: ['battery_android_6', false],
+  flag: ['flag', true],
+  calendar: ['calendar_month', false],
+  trendingUp: ['trending_up', false],
+  stackedLine: ['stacked_line_chart', false],
+  wand: ['wand_stars', true],
+  lock: ['lock', true],
+  add: ['add', false],
+  remove: ['remove', false],
+  check: ['check', false],
+  checkCircle: ['check_circle', false],
+  search: ['search', false],
+  edit: ['edit', true],
+  delete: ['delete', false],
+  share: ['ios_share', false],
+  play: ['play_arrow', true],
+  skipNext: ['skip_next', true],
+  bookmark: ['bookmark', true],
+  sprint: ['sprint', false],
+  mobility: ['sports_gymnastics', false],
+  dumbbell: ['fitness_center', false],
+  barbell: ['exercise', false],
+  star: ['star', true],
+  profile: ['person', false],
+  heartMonitor: ['monitor_heart', false],
+  trophy: ['trophy', true],
+  language: ['language', false],
+  camera: ['photo_camera', false],
+  download: ['download', false],
+  upload: ['upload', false],
+  walk: ['directions_walk', false],
+  scale: ['monitor_weight', false],
+  fire: ['local_fire_department', true],
+  heart: ['favorite', true],
+  timer: ['timer', false],
+  bolt: ['bolt', true],
+  warning: ['warning', true],
+  history: ['history', false],
+  eventRepeat: ['event_repeat', false],
+  run: ['directions_run', false],
+  bike: ['directions_bike', false],
+  pool: ['pool', false],
+  hiking: ['hiking', false],
+  rowing: ['rowing', false],
+  list: ['format_list_bulleted', false],
+  arrowForward: ['arrow_forward', false],
+  trendingDown: ['trending_down', false],
+  height: ['height', false],
+  cake: ['cake', false],
+  bedtime: ['bedtime', true],
+  block: ['block', false],
+  healing: ['healing', false],
+  tune: ['tune', false],
+  restart: ['restart_alt', false],
+  image: ['image', false],
+  addPhoto: ['add_a_photo', false],
+  notes: ['notes', false],
+  stairs: ['stairs', false],
+  pause: ['pause', true],
+  checklist: ['checklist', false],
+  event: ['event', false],
+  sync: ['sync', false],
+  filter: ['filter_list', false],
+  visibility: ['visibility', false],
+  photoLibrary: ['photo_library', false],
+  compare: ['compare', false],
+  database: ['database', false],
+  notifications: ['notifications', false],
+  distance: ['straighten', false],
+  speed: ['speed', false],
+  help: ['help', false],
+  update: ['update', false],
+  smartphone: ['mobile', false],
+  today: ['today', false],
+  deleteForever: ['delete_forever', false],
+  verified: ['verified_user', false],
+}
+
+const out = ['// Automatisch erzeugt von scripts/gen-icons.mjs – nicht von Hand ändern.', '// Quelle: Material Symbols Rounded (Apache License 2.0), viewBox "0 -960 960 960".', '', 'export const ICON_PATHS = {']
+for (const [key, [name, fill]] of Object.entries(icons)) {
+  const file = join(src, `${name}${fill ? '-fill' : ''}.svg`)
+  if (!existsSync(file)) throw new Error(`Icon fehlt: ${file}`)
+  const svg = readFileSync(file, 'utf8')
+  const paths = [...svg.matchAll(/ d="([^"]+)"/g)].map((m) => m[1])
+  out.push(`  ${key}: ${JSON.stringify(paths.join(' '))},`)
+}
+out.push('} as const', '', 'export type IconName = keyof typeof ICON_PATHS', '')
+writeFileSync(join(root, 'src/components/icons/paths.ts'), out.join('\n'))
+console.log(`${Object.keys(icons).length} Icons geschrieben.`)

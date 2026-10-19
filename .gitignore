@@ -1,0 +1,25 @@
+# Abhängigkeiten und Builds
+node_modules/
+dist/
+dev-dist/
+coverage/
+*.tsbuildinfo
+
+# Tests / visuelle Kontrolle
+test-results/
+playwright-report/
+screenshots/vergleich/
+screenshots/app/
+
+# Originale aus der MCI-App: fremdes Design, groß, nur lokale Referenz (siehe DECISIONS.md)
+screenshots/*.png
+
+# Persönliche Daten (Startwerte, ausgelesene Statistik-Werte) – nie ins öffentliche Repository
+privat/
+
+# System
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json

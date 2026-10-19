@@ -16,6 +16,8 @@ export function initApp() {
   db.customExercises
     .toArray()
     .then(setCustomExercises)
+    // Bestehende Pläne an die aktuellen Trainingsregeln anpassen (einmalig je Plan)
+    .then(() => import('../db/repo/migrate').then((m) => m.migratePlanRules()))
     .catch(() => {})
   loadWeightSteps().catch(() => {})
 }

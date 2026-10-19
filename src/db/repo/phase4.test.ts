@@ -1,3 +1,4 @@
+import { getExercise } from '../../data/exercises'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { db } from '../db'
 import { setNow } from '../../logic/dates'
@@ -92,10 +93,12 @@ describe('Phase 4: Zyklus, Detail, Verlauf', () => {
   it('protokolliert einen Übungstausch sofort', async () => {
     const entries = await dayEntries('2026-10-21')
     const id = await ensureSession('2026-10-21', entries[0].planDay!.id!)
-    const se = (await db.sessionExercises.where('sessionId').equals(id).toArray()).find((x) => x.exerciseId === 'butterfly')!
-    await swapExercise(se.id!, 'kabel-crossover', 'heute')
+    // eine Isolationsübung der Einheit (welche Variante heute dran ist, ist egal)
+    const se = (await db.sessionExercises.where('sessionId').equals(id).toArray()).find((x) => x.role === 'isolation')!
+    const from = getExercise(se.exerciseId)!.name
+    await swapExercise(se.id!, 'kurzhantel-fliegende', 'heute')
     const log = await adjustmentLog()
     expect(log[0]).toMatchObject({ kind: 'tausch', field: 'uebung' })
-    expect(log[0].reason).toBe('Butterfly → Kabel-Crossover')
+    expect(log[0].reason).toBe(from + ' → Kurzhantel-Fliegende')
   })
 })

@@ -4,7 +4,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db/db'
 import { useProfile, usePlanFor } from '../../db/hooks'
 import type { EquipmentId, Profile } from '../../db/types'
-import { loadPlanDays, regeneratePlanNow } from '../../db/repo/plan'
+import { loadPlanDays, planReport, previewPlan, regeneratePlanNow } from '../../db/repo/plan'
+import { PlanVolumeSummary } from '../flow/steps/PlanVolumeSummary'
 import { STEP_EQUIPMENT, loadWeightSteps, saveWeightSteps } from '../../db/repo/weights'
 import { BottomSheet, SheetTitle } from '../../components/ui/BottomSheet'
 import { Button } from '../../components/ui/Button'
@@ -37,6 +38,14 @@ export function TrainingSettingsPage() {
   const [sheet, setSheet] = useState<Sheet>(null)
   const [confirm, setConfirm] = useState(false)
   const [showPlan, setShowPlan] = useState(false)
+  // Wochenvolumen: aktueller Plan bzw. Vorschau mit den geänderten Einstellungen
+  const draftKey = draft ? JSON.stringify({ ...draft, onboardingDone: 0 }) : ''
+  const savedKey = saved ? JSON.stringify({ ...saved, onboardingDone: 0 }) : ''
+  const volume = useLiveQuery(async () => {
+    if (!saved || !draft) return null
+    if (draftKey !== savedKey) return previewPlan(draft)
+    return plan?.id ? planReport(plan.id, saved) : null
+  }, [draftKey, savedKey, plan?.id])
 
   useEffect(() => {
     if (saved && !draft) setDraft(saved)
@@ -120,6 +129,10 @@ export function TrainingSettingsPage() {
             <Icon name="chevronRight" size={20} className="text-fg-2" />
           </Row>
         </Group>
+      </Section>
+
+      <Section title="Wochenvolumen" hint={dirty ? 'Vorschau mit Deinen Änderungen – übernimm sie mit „Plan neu erstellen“.' : 'Aktueller Plan in einer normalen Woche (ohne Deload).'}>
+        {volume ? <PlanVolumeSummary report={volume.report} suggestion={volume.suggestion} onApply={(s) => set({ split: s.split, weekdays: s.weekdays })} impossibleReason="keine passende Übung (Schmerzen, Equipment oder Ausschlüsse)" /> : <p className="px-2 text-fg-2">…</p>}
       </Section>
 
       <Section title="Aktueller Plan" hint={plan ? `Gültig seit ${formatLong(plan.startDate)}.` : undefined}>

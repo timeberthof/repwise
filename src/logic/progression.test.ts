@@ -50,7 +50,7 @@ describe('Doppelte Progression', () => {
   it('erhöht das Gewicht, wenn alle Sätze das obere Ende beim Ziel-RIR schaffen', () => {
     const r = baseSuggestion({ exercise: bench, repMin: 8, repMax: 12, targetRir: 2, plannedSets: 3, history: hist({ weight: 50, reps: [12, 12, 12] }) })
     expect(r.weight).toBe(52.5)
-    expect(r.notes[0].reason).toBe('+2,5 kg, weil du alle Sätze mit 12 Wdh. geschafft hast.')
+    expect(r.notes[0].reason).toBe('+2,5 kg, weil du alle Sätze mit 12 Wdh. geschafft hast. Jetzt wieder mit 8 Wdh. beginnen.')
   })
 
   it('erhöht nicht, wenn das Ziel-RIR unterschritten wurde', () => {
@@ -136,9 +136,13 @@ describe('Wochentypen', () => {
     expect(r.p.sets).toBe(2)
     expect(r.notes[0].reason).toBe('Die Anzahl deiner Sätze wurde durch die Deload-Woche für eine optimale Progression angepasst.')
   })
-  it('Overreaching erhöht, Intro senkt das Volumen', () => {
-    expect(applyWeekType(base, 'overreaching', 2.5).p.sets).toBe(5)
-    expect(applyWeekType(base, 'intro', 2.5).p.sets).toBe(3)
+  it('Overreaching +1 Satz bei Mehrgelenksübungen (höchstens 4), Intro gibt mehr Reserve', () => {
+    expect(applyWeekType({ ...base, sets: 3 }, 'overreaching', 2.5, undefined, { role: 'ergaenzung' }).p.sets).toBe(4)
+    expect(applyWeekType(base, 'overreaching', 2.5, undefined, { role: 'grund' }).p.sets).toBe(4)
+    expect(applyWeekType({ ...base, sets: 3 }, 'overreaching', 2.5, undefined, { role: 'isolation' }).p.sets).toBe(3)
+    const intro = applyWeekType(base, 'intro', 2.5)
+    expect(intro.p.sets).toBe(4)
+    expect(intro.p.targetRir).toBe(3)
   })
   it('Peak Week senkt die Reserve', () => {
     expect(applyWeekType(base, 'peak', 2.5).p.targetRir).toBe(1)

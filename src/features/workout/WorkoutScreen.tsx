@@ -9,11 +9,12 @@ import { ProgressSegments } from '../../components/ui/ProgressSegments'
 import { ActionSheet } from '../../components/ui/ActionSheet'
 import { muscleLabel } from '../../data/muskeln'
 import { formatDuration } from '../../logic/dates'
-import { WEEK_TYPE_INFO } from '../../logic/progression'
+import { PROGRESSION_CONFIG, WEEK_TYPE_INFO } from '../../logic/progression'
 import { estimateMinutes } from '../../logic/planGenerator'
 import type { MuscleId } from '../../db/types'
 import { db } from '../../db/db'
-import { addExerciseToSession, finishSession, removeExerciseFromSession, resetSession, setSessionWeekType, startSession, swapExercise } from '../../db/repo/sessions'
+import { addExerciseToSession, finishSession, removeExerciseFromSession, resetSession, setSessionWeekType, startSession, swapExercise, TooManyExercisesError } from '../../db/repo/sessions'
+import { useToast } from '../../components/ui/Toast'
 import { WEEK_TYPE_STYLE } from '../training/weekTypeStyle'
 import { WeekTypeSheet } from '../training/WeekTypeSheet'
 import { CheckinSheet } from './CheckinSheet'
@@ -29,6 +30,7 @@ export default function WorkoutScreen() {
   const { id } = useParams()
   const sessionId = Number(id)
   const navigate = useNavigate()
+  const toast = useToast()
   const data = useWorkout(sessionId)
   const [openIdx, setOpenIdx] = useState<number | null>(null)
   const [checkin, setCheckin] = useState(false)
@@ -95,6 +97,10 @@ export default function WorkoutScreen() {
   }
 
   const weekStyle = WEEK_TYPE_STYLE[session.weekType]
+  // Aufwärm-Hinweis nur bei der ersten schweren Grundübung
+  const firstGrund = isMobility ? -1 : items.findIndex((it) => it.role === 'grund')
+  const full = !isMobility && items.length >= PROGRESSION_CONFIG.planning.maxExercises
+  const openAdd = () => (full ? toast('Höchstens ' + PROGRESSION_CONFIG.planning.maxExercises + ' Übungen pro Einheit', 'Tausche stattdessen eine Übung (⇄).') : setAdding(true))
 
   return (
     <div className="min-h-dvh bg-bg pb-32">
@@ -156,7 +162,7 @@ export default function WorkoutScreen() {
           </div>
         ) : (
           items.map((it, i) => (
-            <ExerciseRow key={it.id} it={it} active={running && i === current} onOpen={() => setOpenIdx(i)} onSwap={() => setSwapFor(it)} onMenu={() => setCardMenu(it)} finished={finished} />
+            <ExerciseRow key={it.id} it={it} active={running && i === current} onOpen={() => setOpenIdx(i)} onSwap={() => setSwapFor(it)} onMenu={() => setCardMenu(it)} finished={finished} warmup={i === firstGrund} />
           ))
         )}
       </div>
@@ -174,7 +180,7 @@ export default function WorkoutScreen() {
             </>
           ) : (
             <>
-              <Button variant="secondary" icon="add" className="flex-1" onClick={() => setAdding(true)}>
+              <Button variant="secondary" icon="add" className="flex-1" onClick={openAdd}>
                 Hinzufügen
               </Button>
               <Button icon="play" className="flex-1" onClick={() => (unlockAudio(), setCheckin(true))}>
@@ -191,6 +197,7 @@ export default function WorkoutScreen() {
         session={session}
         item={openItem}
         isLast={items.filter((it, i) => i !== openIdx && it.doneCount < Math.max(it.sets, 1)).length === 0}
+        warmup={openIdx !== null && openIdx === firstGrund}
         onStart={() => setCheckin(true)}
         onNext={next}
         onFinish={finish}
@@ -219,7 +226,12 @@ export default function WorkoutScreen() {
         defaultArt={isMobility ? 'mobility' : 'kraft'}
         onPick={async (e) => {
           setAdding(false)
-          await addExerciseToSession(sessionId, e.id)
+          try {
+            await addExerciseToSession(sessionId, e.id)
+          } catch (err) {
+            if (err instanceof TooManyExercisesError) toast(err.message, 'Tausche stattdessen eine Übung (⇄).')
+            else throw err
+          }
         }}
       />
       <ActionSheet
@@ -227,7 +239,7 @@ export default function WorkoutScreen() {
         onClose={() => setMenu(false)}
         title={session.name}
         items={[
-          { label: 'Übung hinzufügen', icon: 'add', onClick: () => setAdding(true) },
+          { label: 'Übung hinzufügen', icon: 'add', onClick: openAdd },
           ...(!isMobility ? [{ label: 'Trainingstyp ändern', icon: 'tune' as const, onClick: () => setTypeSheet(true) }] : []),
           { label: 'Check-in ändern', icon: 'thermostat', onClick: () => setCheckin(true) },
           ...(running ? [{ label: 'Training abschließen', icon: 'check' as const, onClick: finish }] : []),
@@ -247,7 +259,7 @@ export default function WorkoutScreen() {
   )
 }
 
-function ExerciseRow({ it, onOpen, onSwap, onMenu, active, finished, plain }: { it: WorkoutExercise; onOpen: () => void; onSwap: () => void; onMenu: () => void; active?: boolean; finished?: boolean; plain?: boolean }) {
+function ExerciseRow({ it, onOpen, onSwap, onMenu, active, finished, plain, warmup }: { it: WorkoutExercise; onOpen: () => void; onSwap: () => void; onMenu: () => void; active?: boolean; finished?: boolean; plain?: boolean; warmup?: boolean }) {
   const done = it.sets_.length > 0 && it.doneCount >= it.sets_.length
   const highlight = it.adjustments.find((a) => a.kind !== 'manuell' && a.kind !== 'wochentyp' && a.field === 'weight')
   return (
@@ -265,7 +277,11 @@ function ExerciseRow({ it, onOpen, onSwap, onMenu, active, finished, plain }: { 
       <span className="min-w-0 flex-1">
         <span className="block text-[14.5px] font-light text-fg-2">{muscleLabel(it.exercise.primaer)}</span>
         <span className="mt-[3px] block text-[18.5px] font-semibold leading-[1.2]">{it.exercise.name}</span>
-        <span className="mt-[5px] block text-[15px] font-light text-fg-2">{prescriptionText(it)}</span>
+        <span className="mt-[5px] block text-[15px] font-light text-fg-2">
+          {prescriptionText(it)}
+          {it.exercise.art === 'kraft' ? ` · RIR ${it.targetRir}` : ''}
+        </span>
+        {warmup && !finished && it.doneCount === 0 && <span className="mt-[3px] block text-[13px] text-fg-2">vorher 2–3 Aufwärmsätze (zählen nicht)</span>}
         {highlight && !finished && (
           <span className="mt-[5px] flex items-center gap-1 text-[13.5px] text-amber">
             <Icon name="wand" size={16} gradient={['#f3af3d', '#ed774d']} />

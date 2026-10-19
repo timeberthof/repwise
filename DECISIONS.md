@@ -62,8 +62,8 @@ Neue Annahmen während des Baus werden unten angehängt.
 - **Wochenplanung:** Tag antippen, dann ⇄ und den Zieltag antippen → Training wird verschoben. Die Reihenfolge Push/Pull ergibt sich aus der Reihenfolge der Tage.
 - **Planstart:** Montag dieser Woche (Mo–Mi) bzw. nächster Montag (Do–So). Bei Onboarding am 18.10. also **Mo 19.10.2026** (statt des MCI-Zyklusstarts am 22.10.), beginnend mit einer Intro-Woche.
 - **Push | Pull wie im Original:** Push = Brust, Schultern, Trizeps + kniedominante Beinübungen (Beinpresse, Beinstrecker, Adduktoren); Pull = Rücken, hintere Schulter, Bizeps + Hüftstrecker (KH-Kreuzheben, Beinbeuger), Bauch. Übungen mit Verlauf werden bevorzugt.
-- **Volumen:** Sätze je Übung Anfänger 2 / Fortgeschritten 3 / Profi 4, Schwerpunkt-Muskeln +1 Satz; Übungszahl wird an die Dauer angepasst (Schätzung: Sätze × (Pause + 45 s) + 4 Min).
-- **Wiederholungsbereiche:** Haupt-Grundübungen 5–8 (ab Fortgeschritten), sonst 8–12, kleine Isolationsübungen 15–20 (die drei Bereiche des Originals).
+- **Volumen:** ~~Sätze je Übung Anfänger 2 / Fortgeschritten 3 / Profi 4~~ – ersetzt durch „Trainingsplanung v2“ (Rollen, max. 7 Übungen, Wochenvolumen).
+- **Wiederholungsbereiche:** ~~5–8 / 8–12 / 15–20~~ – ersetzt durch „Trainingsplanung v2“ (5–8, 6–10, 8–12, 10–15, 12–20 je Rolle).
 - **Schmerzen ab Stärke 5:** Übungen, die das Gelenk belasten, werden nicht eingeplant (z. B. Fußgelenk → keine Kniebeugen, Ausfallschritte, Wadenheben); die Mobility-Einheit zielt auf die Region.
 - **Körperfett-Schätzung** (Bereich auf dem Regler): Deurenberg-Formel aus BMI, Alter, Geschlecht ± 3 %.
 - **Ziel-Empfehlung** nach Körperfett (s. u.)
@@ -73,7 +73,7 @@ Neue Annahmen während des Baus werden unten angehängt.
 - **Ablauf:** Einheit antippen → Übersicht (S27) → „Starten“ → Check-in (Wellness, Schlaf, Muskelkater; überspringbar) → Übungs-Sheet. Weißer Button: „Satz N abschließen ✓“ → Pausentimer im selben Button (S45) → nach dem letzten Satz „Nächste Übung ▶“ → nach der letzten Übung „Training beenden ✓“ → Abschluss (S46).
 - **Satz-Eingabe:** Werte des aktuellen Satzes stehen vorausgefüllt (grau = Vorschlag). Gespeicherte Werte werden für die folgenden Sätze übernommen. Bereits erledigte Sätze lassen sich antippen und korrigieren.
 - **Vorschlag Wiederholungen:** Wiederholungen der letzten Einheit, begrenzt auf den Bereich; ohne Verlauf das untere Ende.
-- **Pausentimer:** läuft über die Uhrzeit (überlebt Sheet-Wechsel, Sperrbildschirm, Neuladen). Ende: dreifacher Ton (Web Audio, nach erstem Tippen entsperrt) + Button blinkt. Pausenzeiten: Grundübungen 150 s, sonstige 120 s, kleine Isolation 90 s, Mobility 15 s; je Übung über ⚙ änderbar.
+- **Pausentimer:** läuft über die Uhrzeit (überlebt Sheet-Wechsel, Sperrbildschirm, Neuladen). Ende: dreifacher Ton (Web Audio, nach erstem Tippen entsperrt) + Button blinkt. Pausenzeiten nach Rolle (siehe „Trainingsplanung v2“), Mobility 15 s; je Übung über ⚙ änderbar.
 - **Bildschirm anlassen:** Screen Wake Lock, Fallback stummes Video (ältere iOS).
 - **Anpassungen sichtbar:** Karte in der Übersicht zeigt den ersten Grund (✨), im Übungs-Sheet eine aufklappbare Hinweisleiste mit allen Gründen und „Rückgängig“ (vor dem ersten Satz). Von Hand geänderte Werte bleiben bei Neuberechnung erhalten.
 - **Übung tauschen:** Liste derselben Muskelgruppe, ähnlichstes Bewegungsmuster zuerst; Filter „★ Empfohlen“ (Sortierung nach Ähnlichkeit), Muskel, Equipment (Alle / Mit Gerät / Ohne Gerät, standardmäßig nur eigenes Equipment); danach „Nur heute“ oder „Dauerhaft im Plan ersetzen“. Bereits erledigte Sätze bleiben bei der alten Übung.
@@ -124,3 +124,61 @@ Neue Annahmen während des Baus werden unten angehängt.
 - **Erste Veröffentlichung:** Ältere Commits enthalten noch persönliche Daten. `scripts/veroeffentlichen.ps1` lädt deshalb beim ersten Mal einen einzigen Commit mit dem aktuellen Stand hoch; der alte Verlauf bleibt nur lokal im Branch `archiv/vor-veroeffentlichung`. Commits nutzen danach die anonyme GitHub-Adresse (`BENUTZER@users.noreply.github.com`) statt der privaten E-Mail. Vor jedem Hochladen prüft das Skript, dass `privat/` nicht versioniert ist und das Geburtsdatum in keiner Datei steht.
 - **Anmeldung bei GitHub:** über den Git Credential Manager (in Git für Windows enthalten) im Browser – keine zusätzliche Software, kein Token von Hand.
 - **Workflow** `.github/workflows/deploy.yml`: bei Push auf `main` (und von Hand) → `npm ci` → Tests → Build → GitHub Pages. Actions in den aktuellen Versionen mit Node 24 (Node 20 ist in GitHub Actions abgeschaltet).
+
+## Trainingsplanung v2 (19.10.2026)
+
+Ziel: gleichmäßiger Muskelaufbau aller Muskelgruppen, höchstens 7 Übungen pro Einheit, leichte Variation ohne Verlust der Fortschrittsmessung. Alle Grenzen und Schwellen stehen zentral in `src/logic/progression.ts` (`planning`, `roles`, `doubleProgression`, `weekTypes`); die Logik in `roles.ts`, `volume.ts`, `planBalance.ts`, `variants.ts`, `selection.ts` und `planGenerator.ts`.
+
+**Harte Grenzen pro Einheit**
+- Höchstens **7 Übungen** – beim Erstellen, bei der Migration und bei manuellen Änderungen („Hinzufügen“ ist dann gesperrt, Tauschen geht immer). Die Mobility-Einheit (Super-Satz) ist eine eigene Einheit und zählt nicht mit.
+- **2–4 Arbeitssätze** pro Übung; je Rolle: Grundübung 3–4, Ergänzung 2–4 (Standard 3), Isolation 2–3. Manuell 2–4 (in der Deload-Woche ab 1).
+- **14–22 Arbeitssätze** pro Einheit. Der Grundplan bleibt bei höchstens **20**, damit die Overreaching-Woche noch Sätze dazulegen kann (bis 22).
+- **Aufwärmsätze** zählen nicht; Hinweis nur bei der ersten Grundübung der Einheit (ca. 40 % × 8, 60 % × 5, 80 % × 3 des Arbeitsgewichts).
+- **Reihenfolge:** Grundübungen → Ergänzung → Isolation; innerhalb der Isolation zuletzt Arme, hintere Schulter, Waden, Bauch.
+- **Kürzen bestehender Einheiten** (mehr als 7 Übungen): Anker, Grundübungen und fixierte Übungen bleiben. Zuerst fallen Übungen für **nicht gezählte Muskeln** (z. B. Adduktoren, Shrugs für den Nacken) bzw. **überversorgte** Muskeln, Isolation vor Ergänzung. Ihre Sätze gehen an die übrigen Übungen (bevorzugt unterversorgte Muskeln), ohne die Satzgrenzen zu verletzen.
+
+**Rollen** (Feld `rolle` in `uebungen.json`; bei eigenen Übungen aus dem Bewegungsmuster abgeleitet)
+
+| Rolle | Beispiele | Sätze | Wdh. | Pause | Ziel-RIR |
+|---|---|---|---|---|---|
+| Grundübung | Kniebeuge, Kreuzheben, Bankdrücken (5–8); Rudern, Schulterdrücken, Klimmzüge (6–10) | 3–4 | 5–8 bzw. 6–10 | 150 s (Unterkörper 180 s) | 2 (Bereich 1–3) |
+| Ergänzung | Schrägbank, Beinpresse, Rumänisches Kreuzheben, Latzug, Kabelrudern, Ausfallschritte, Hip Thrust | 3 (2–4) | 8–12 | 90 s (Unterkörper 120 s) | 2 (1–2) |
+| Isolation | Curls, Trizeps, Fliegende, Beinbeuger/-strecker (10–15); Seitheben, hintere Schulter, Waden, Bauch (12–20) | 2–3 | 10–15 bzw. 12–20 | 75 s (Waden/Bauch 60 s, Beine/Brust 90 s) | 1 (0–2), letzter Satz bis knapp ans Versagen |
+
+- Erfahrung: Anfänger Isolation 2 Sätze, Profi Grundübung 4 Sätze; Schwerpunkt-Muskeln +1 Satz (im Bereich der Rolle).
+- **RIR** wird bei jeder Übung im Übungs-Sheet kurz erklärt („RIR 2 = aufhören, wenn noch 2 saubere Wiederholungen möglich wären“) und auf jeder Übungskarte angezeigt.
+
+**Progression (Doppelprogression)**
+- Alle Sätze am oberen Ende beim Ziel-RIR → Gewicht hoch: Mehrgelenksübungen Oberkörper **+2,5 kg**, Unterkörper (Kniebeuge-, Hüftstreck-, Ausfallschritt-Muster, Hip Thrust) **+5 kg**; Isolation und Kurzhanteln (je Hand) kleinster Sprung bzw. nächste verfügbare Stufe. Danach **wieder am unteren Ende** des Bereichs beginnen (vorgeschlagene Wiederholungen der offenen Sätze).
+- Die Steigerung +2,5/+5 kg gilt für alle Mehrgelenksübungen (auch Ergänzung, z. B. Beinpresse +5 kg), nicht nur für Grundübungen.
+- Deload- und Intensivwochen verändern Gewicht und Wiederholungen bewusst und zählen deshalb **nicht als Basis** für Progression und Stagnationserkennung.
+- Jede Anpassung landet wie bisher im Anpassungsprotokoll.
+
+**Wochenvolumen und Gleichgewicht**
+- 12 Gruppen: Brust, oberer Rücken/Lat (inkl. Nacken), vordere, seitliche und hintere Schulter, Bizeps, Trizeps, Quadrizeps, Beinbeuger, Gesäß (inkl. Abduktoren), Waden, Bauch. Nicht gezählt: unterer Rücken, Unterarme, Adduktoren.
+- Zählung: Zielmuskel = 1 Satz, jeder mitarbeitende Muskel = 0,5 Satz (je Gruppe höchstens 1). **Drücken über Kopf zählt für die vordere Schulter** (seitliche 0,5), obwohl die Bibliothek wie MCI teils „Mittlere Schulter“ anzeigt.
+- Ziel je Gruppe **10–20 Sätze pro Woche** und **mindestens 2 Einheiten** (eine Einheit zählt ab 2 anteiligen Sätzen).
+- **Drücken : Ziehen** (Brust, vordere Schulter, Trizeps zu Rücken, hintere Schulter, Bizeps – jeweils Zielmuskel-Sätze) und **Quadrizeps : Beinbeuger** im Bereich 0,8–1,25. Seitheben zählt weder als Drücken noch als Ziehen.
+- Ausgleich beim Erstellen und bei der Migration, in dieser Reihenfolge: Einheiten über dem Satzlimit kürzen → Sätze bei unterversorgten Gruppen erhöhen → Sätze innerhalb der Einheit umschichten → eine Übung ergänzen (freier Platz) oder **eine Isolationsübung** einer überversorgten Gruppe ersetzen (nie Anker, fixierte Übungen oder Schwerpunkte) → Überversorgung senken → Mindestsätze je Einheit → Verhältnisse. Jeder Schritt bleibt in den Grenzen; ersetzte Übungen werden nicht erneut ersetzt.
+- **Nicht mögliche Gruppen** (keine erlaubte Übung wegen Schmerzen, Equipment oder Ausschlüssen, z. B. Waden bei Schmerzen im Sprunggelenk) werden als „nicht möglich“ angezeigt und lösen keinen Vorschlag aus.
+- **Vorschlag statt Grenzüberschreitung:** Erreicht der Split mit höchstens 7 Übungen nicht für alle möglichen Gruppen 10–20 Sätze und 2× pro Woche, schlägt Repwise einen anderen Split bzw. 1–2 Tage mehr vor (Einstellungen → Trainingsplan → Wochenvolumen, mit „Vorschlag übernehmen“; im Onboarding als Hinweis). Beispiel: Ganzkörper 3× → Upper | Lower 5×.
+- **Statistik › Training:** Karte „Sätze pro Muskelgruppe“ für die laufende Woche (erledigt kräftig, geplant hell, Zielbereich grau, Status als Text und Symbol). Antippen erklärt den Wert (Zielmuskel- und mitarbeitende Sätze, Häufigkeit, Bedeutung).
+
+**Variation**
+- **Anker:** die 1–2 ersten Mehrgelenksübungen je Einheit (Brust-/Schulterdrücken, vertikaler/horizontaler Zug, Kniebeuge/Hüftstrecker). Sie bleiben im ganzen Zyklus gleich; erst „Nächsten Zyklus planen“ darf sie (bei Stagnation) durch eine verwandte Variante ersetzen. Übungen mit Verlauf werden bevorzugt, deshalb kann ein Anker auch eine Ergänzungsübung sein (z. B. Latzug, 8–12 Wdh.).
+- **Varianten:** Jede Ergänzungs- und Isolationsübung bekommt im Plan 2–3 gleichwertige Varianten (`variants`): gleiches Bewegungsmuster, gleicher Zielmuskel, gleiche Rolle, nur verfügbares Equipment, keine belasteten Schmerz-Gelenke, keine zusätzlichen Nebenmuskeln. Bevorzugt anderes Gerät oder anderer Winkel; Mehrgelenksübungen bleiben in derselben Belastungsklasse (Maschine/Langhantel/Kabel bzw. Kurzhantel/Körpergewicht), z. B. Beinpresse ↔ Hackenschmidt.
+- **Rotation:** Gezählt werden die Einheiten gleichen Namens seit Planstart (z. B. jede Push-Einheit). Die rotierenden Übungen einer Einheit sind auf Gruppen zu höchstens 3 verteilt; bei jeder Einheit wechselt genau eine Gruppe → **höchstens 3 Wechsel pro Einheit**, der Rest bleibt vertraut. In der **Deload-Woche** bleiben die Übungen der letzten Einheit.
+- **Eigener Verlauf je Variante:** Jede Variante hat ihre eigene Gewichts- und Progressionshistorie; kommt sie wieder dran, gilt ihr zuletzt genutztes Gewicht. Ohne eigenen Verlauf: markierte Schätzung aus der verwandten Übung. Die **Trainingspause** wird über alle Varianten gemessen (eine rotierende Variante gilt nicht als „pausiert“).
+- **Fixieren:** Im Übungs-Sheet „Fixieren“ – die gerade angezeigte Variante bleibt fest im Plan und wechselt nicht mehr; „Fixiert“ antippen hebt das auf. Beides steht im Protokoll.
+- **Dauerhaft ersetzen** ersetzt die Übung samt Varianten in allen Einheiten des Plans und sucht für die neue Übung passende Varianten.
+- Geräteauswahl: wie bisher unter Einstellungen → Trainingsplan → Trainingsort & Equipment.
+
+**Zyklus**
+- Intro: Ziel-RIR +1 (Sätze wie geplant). Normal: Plan. Overreaching: +1 Satz bei Mehrgelenksübungen (max. 4 je Übung, 22 je Einheit). **Peak Week = Intensivwoche:** unteres Ende des Bereichs, RIR −1 (Mehrgelenk mind. 1, Isolation bis 0), bei Mehrgelenksübungen etwas mehr Gewicht passend zur Maximalkraft (höchstens 2 Steigerungsschritte). **Deload:** insgesamt 40–50 % weniger Sätze (Ziel ≈ 45 %, mind. 1 Satz je Übung, Grundübungen behalten mehr), gleiche Übungen, gleiches Gewicht, **RIR 3–4**.
+- Geändert gegenüber Phase 4: Die Intro-Woche senkt nicht mehr die Satzzahl (sonst fiele die Einheit unter 14 Sätze), sondern gibt mehr Reserve.
+- Manuelle Wochenänderungen (z. B. Deload überspringen) funktionieren unverändert.
+
+**Daten, Migration, Backups**
+- Datenmodell: `Exercise.rolle`, `PlanExercise.role/anchor/variants/pinned`, `SessionExercise.planExerciseId/role/targetReps`, `Plan.rulesVersion`, Protokoll-Art „Variante“. Alles optional, ohne neue Indizes → keine Dexie-Schemaänderung nötig.
+- **Migration** (`src/db/repo/migrate.ts`): beim App-Start und nach jedem Backup-Import für aktive Pläne mit `rulesVersion` < 2. Eigene Übungen bleiben, wo es geht; Kürzen und Ausgleich wie oben; Plantage behalten ihre IDs. Der Verlauf (Einheiten, Sätze, Maximalkraft, Protokoll) bleibt unverändert; nur noch nicht begonnene zukünftige Einheiten werden neu angelegt. Eintrag im Anpassungsprotokoll mit allen Änderungen.
+- **Alte Backups** (Format 1) bleiben importierbar; der Plan wird beim Import migriert. Das Backup-Format bleibt Version 1 (neue Felder sind optional).

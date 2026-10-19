@@ -11,7 +11,8 @@ import { StartwerteReview } from '../flow/steps/StartwerteStep'
 import { CycleStrip, PlanProgress, PlanSummaryList } from '../flow/steps/CreatePlanStep'
 import { Button } from '../../components/ui/Button'
 import { loadBundledStartwerte, profileDefaults, type Startwerte } from '../../db/repo/startwerte'
-import { loadPlanDays, type PlanDayWithExercises } from '../../db/repo/plan'
+import { loadPlanDays, planReport, type PlanDayWithExercises } from '../../db/repo/plan'
+import { PlanVolumeSummary } from '../flow/steps/PlanVolumeSummary'
 import { db } from '../../db/db'
 import { ageOn, formatDate, formatLong } from '../../logic/dates'
 import { useToast } from '../../components/ui/Toast'
@@ -48,6 +49,7 @@ export default function OnboardingFlow() {
   const [startwerte, setStartwerte] = useState<Startwerte | null>(null)
   const [planDays, setPlanDays] = useState<PlanDayWithExercises[]>([])
   const [planStart, setPlanStart] = useState('')
+  const [volume, setVolume] = useState<Awaited<ReturnType<typeof planReport>> | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   // Vorbelegung: bestehendes Profil oder Startwerte
@@ -93,6 +95,8 @@ export default function OnboardingFlow() {
       const plan = await db.plans.get(planId)
       setPlanStart(plan?.startDate ?? '')
       setPlanDays(await loadPlanDays(planId))
+      const profile = await db.profile.get('me')
+      if (profile) setVolume(await planReport(planId, profile))
       setStep(STEPS.indexOf('plan'))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -229,6 +233,13 @@ export default function OnboardingFlow() {
         <FlowLayout step={step} total={STEPS.length} title="Dein Trainingsplan" subtitle={planStart ? `Startet am ${formatLong(planStart)} · 6-Wochen-Zyklus` : undefined} hideButton>
           <CycleStrip />
           <PlanSummaryList days={planDays} />
+          {volume && (
+            <div className="mt-6">
+              <p className="mb-2 text-section font-semibold uppercase tracking-[0.06em] text-fg-2">Sätze pro Muskelgruppe und Woche</p>
+              <PlanVolumeSummary report={volume.report} suggestion={volume.suggestion} impossibleReason="keine passende Übung (Schmerzen, Equipment oder Ausschlüsse)" />
+              {volume.suggestion && <p className="mt-2 px-1 text-[13px] text-fg-2">Ändern kannst Du das jederzeit unter Einstellungen → Trainingsplan.</p>}
+            </div>
+          )}
           <div className="sticky bottom-0 -mx-5 mt-6 bg-gradient-to-t from-black via-black/95 to-transparent px-5 pt-6" style={{ paddingBottom: 'max(var(--safe-bottom), 16px)' }}>
             <Button onClick={() => navigate('/training', { replace: true })}>Los geht's</Button>
           </div>

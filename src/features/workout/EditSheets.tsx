@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { Exercise, WeightRow } from '../../db/types'
+import type { Exercise, WeekType, WeightRow } from '../../db/types'
+import { manualSetRange } from '../../db/repo/sessions'
 import { BottomSheet, SheetTitle } from '../../components/ui/BottomSheet'
 import { Button } from '../../components/ui/Button'
 import { StepperField } from '../../components/ui/Stepper'
@@ -8,7 +9,7 @@ import { Icon } from '../../components/icons/Icon'
 import { RecommendedLegend } from '../flow/FlowLayout'
 import { AdjustmentBox } from './AdjustmentBox'
 import type { WorkoutExercise } from './useWorkout'
-import { REP_RANGES, isRecommendedRange, recommendedRepRanges } from '../../logic/progression'
+import { REP_RANGES, isRecommendedRange, recommendedRepRanges } from '../../logic/roles'
 import { expandRows, getWeightConfig, resetWeightConfig, saveWeightConfig, stepFor } from '../../db/repo/weights'
 import { fmt } from '../../logic/format'
 import { db } from '../../db/db'
@@ -27,7 +28,8 @@ function CancelConfirm({ onCancel, onConfirm }: { onCancel: () => void; onConfir
 }
 
 /** SÄTZE (S35): Stepper; zeigt die automatische Anpassung der Satzzahl mit Grund. */
-export function SetsSheet({ open, onClose, item, onSave }: { open: boolean; onClose: () => void; item: WorkoutExercise | null; onSave: (n: number) => void }) {
+export function SetsSheet({ open, onClose, item, onSave, weekType = 'normal' }: { open: boolean; onClose: () => void; item: WorkoutExercise | null; onSave: (n: number) => void; weekType?: WeekType }) {
+  const [lo, hi] = manualSetRange(weekType, item?.doneCount ?? 0)
   const [n, setN] = useState(3)
   useEffect(() => {
     if (open && item) setN(item.sets)
@@ -38,13 +40,16 @@ export function SetsSheet({ open, onClose, item, onSave }: { open: boolean; onCl
       <SheetTitle>Sätze</SheetTitle>
       <div className="px-6 pb-4">
         {note && <AdjustmentBox note={note} className="mb-[22px]" />}
-        <StepperField value={n} onChange={setN} min={Math.max(1, item?.doneCount ?? 1)} max={10} digits={0} />
+        <StepperField value={n} onChange={setN} min={lo} max={hi} digits={0} />
+        <p className="mt-3 text-center text-label text-fg-2">
+          {lo}–{hi} Arbeitssätze pro Übung{weekType === 'deload' ? ' (Deload-Woche)' : ''}. Aufwärmsätze zählen nicht mit.
+        </p>
       </div>
     </BottomSheet>
   )
 }
 
-/** WIEDERHOLUNGEN (S33): 5–8 / 8–12 / 15–20, Empfehlung hervorgehoben. */
+/** WIEDERHOLUNGEN (S33): 5–8 / 6–10 / 8–12 / 10–15 / 12–20, Empfehlung nach Rolle hervorgehoben. */
 export function RepsSheet({ open, onClose, item, onSave }: { open: boolean; onClose: () => void; item: WorkoutExercise | null; onSave: (min: number, max: number) => void }) {
   const [sel, setSel] = useState<[number, number]>([8, 12])
   useEffect(() => {

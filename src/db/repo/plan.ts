@@ -1,10 +1,40 @@
 import { db, kvGet } from '../db'
 import type { ISODate, Plan, PlanDay, PlanExercise, Profile } from '../types'
-import { generatePlan, type GeneratedDay } from '../../logic/planGenerator'
-import { allExercises } from '../../data/exercises'
+import { generatePlanWithReport, reportFor, suggestAlternative, type GeneratedDay, type PlanInput, type PlanReport } from '../../logic/planGenerator'
+import { allExercises, getExercise } from '../../data/exercises'
 import { defaultPlanStart } from '../../logic/cycle'
 import { today, weekdayIndex } from '../../logic/dates'
+import { allowedExercises, possibleGroups, type SelectionInput } from '../../logic/selection'
+import { variantsFor } from '../../logic/variants'
 import type { WorkingWeight } from './startwerte'
+
+/** Version der Planungsregeln (höchstens 7 Übungen, Rollen, Wochenvolumen, Varianten). */
+export const PLAN_RULES_VERSION = 2
+
+/** Eingaben für den Plangenerator aus dem Profil. */
+export async function planInputFor(profile: Profile, avoid: string[] = [], preferFirst: string[] = []): Promise<PlanInput> {
+  const history = await exercisesWithHistory()
+  const preferred = [...preferFirst, ...history.filter((id) => !preferFirst.includes(id))].filter((id) => !avoid.includes(id))
+  return {
+    split: profile.split,
+    weekdays: profile.weekdays,
+    sessionMinutes: profile.sessionMinutes,
+    experience: profile.experience,
+    focus: profile.focus,
+    equipment: profile.equipment,
+    excluded: profile.excludedExercises,
+    pains: profile.pains,
+    location: profile.location,
+    mobility: profile.mobility,
+    preferred,
+    avoid,
+    library: allExercises(),
+  }
+}
+
+export function selectionFor(input: PlanInput): SelectionInput {
+  return { equipment: input.equipment, excluded: input.excluded, pains: input.pains, location: input.location, experience: input.experience, preferred: input.preferred, avoid: input.avoid, library: input.library }
+}
 
 /** Übungen mit vorhandenem Verlauf (Startwerte oder eigene Trainings). */
 export async function exercisesWithHistory(): Promise<string[]> {
@@ -16,21 +46,37 @@ export async function exercisesWithHistory(): Promise<string[]> {
 }
 
 export async function buildPlanDays(profile: Profile, avoid: string[] = []): Promise<GeneratedDay[]> {
-  return generatePlan({
-    split: profile.split,
-    weekdays: profile.weekdays,
-    sessionMinutes: profile.sessionMinutes,
-    experience: profile.experience,
-    focus: profile.focus,
-    equipment: profile.equipment,
-    excluded: profile.excludedExercises,
-    pains: profile.pains,
-    location: profile.location,
-    mobility: profile.mobility,
-    preferred: (await exercisesWithHistory()).filter((id) => !avoid.includes(id)),
-    avoid,
-    library: allExercises(),
-  })
+  return generatePlanWithReport(await planInputFor(profile, avoid)).days
+}
+
+/** Plan aus dem Profil mit Bericht (Wochenvolumen) und ggf. Vorschlag für einen anderen Split. */
+export async function previewPlan(profile: Profile): Promise<{ days: GeneratedDay[]; report: PlanReport; suggestion: ReturnType<typeof suggestAlternative> }> {
+  const input = await planInputFor(profile)
+  const { days, report } = generatePlanWithReport(input)
+  return { days, report, suggestion: report.ok ? null : suggestAlternative(input) }
+}
+
+/** Bericht zu einem gespeicherten Plan (Sätze je Muskelgruppe einer normalen Woche). */
+export async function planReport(planId: number, profile: Profile): Promise<{ report: PlanReport; suggestion: ReturnType<typeof suggestAlternative> }> {
+  const days = await loadPlanDays(planId)
+  const input = await planInputFor(profile)
+  const possible = possibleGroups(allowedExercises(selectionFor(input)))
+  const report = reportFor(
+    days.map((d) => ({ kind: d.kind, exercises: d.exercises })),
+    possible,
+    getExercise,
+  )
+  return { report, suggestion: report.ok ? null : suggestAlternative(input) }
+}
+
+/** Varianten für eine Übung, die neu in den Plan kommt (z. B. „Dauerhaft ersetzen“). */
+export async function variantsForPlan(exerciseId: string, notIn: string[], anchor: boolean): Promise<string[]> {
+  const ex = getExercise(exerciseId)
+  const profile = await db.profile.get('me')
+  if (!ex || !profile || anchor) return [exerciseId]
+  const input = await planInputFor(profile)
+  const sel = selectionFor(input)
+  return variantsFor(ex, allowedExercises(sel), sel, notIn)
 }
 
 // ---------------------------------------------------------------------------
@@ -68,6 +114,7 @@ export async function savePlan(days: GeneratedDay[], opts: { startDate: string; 
       weekOverrides: {},
       status: opts.status ?? 'aktiv',
       source: opts.source,
+      rulesVersion: PLAN_RULES_VERSION,
     })) as number
     let order = 0
     for (const d of days) {
@@ -93,7 +140,13 @@ export async function copyPlan(planId: number, startDate: string): Promise<numbe
   const gen: GeneratedDay[] = []
   for (const d of days) {
     const ex = await db.planExercises.where('planDayId').equals(d.id!).sortBy('order')
-    gen.push({ weekday: d.weekday, name: d.name, kind: d.kind, location: d.location, exercises: ex.map(({ exerciseId, sets, repMin, repMax, targetRir, restSec, superset }) => ({ exerciseId, sets, repMin, repMax, targetRir, restSec, superset })) })
+    gen.push({
+      weekday: d.weekday,
+      name: d.name,
+      kind: d.kind,
+      location: d.location,
+      exercises: ex.map(({ exerciseId, sets, repMin, repMax, targetRir, restSec, superset, role, anchor, variants, pinned }) => ({ exerciseId, sets, repMin, repMax, targetRir, restSec, superset, role, anchor, variants, pinned })),
+    })
   }
   return savePlan(gen, { startDate, split: plan.split, source: 'zyklus', status: plan.status })
 }

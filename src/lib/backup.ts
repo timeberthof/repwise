@@ -176,6 +176,9 @@ export async function restoreBackup(data: BackupFile): Promise<void> {
   await markBackupDone()
   setCustomExercises(await db.customExercises.toArray())
   await loadWeightSteps()
+  // Pläne aus älteren Backups an die aktuellen Trainingsregeln anpassen (Verlauf bleibt unverändert)
+  const { migratePlanRules } = await import('../db/repo/migrate')
+  await migratePlanRules()
 }
 
 /** Alle Daten löschen (Datenbank und lokale Zwischenspeicher). */

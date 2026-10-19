@@ -69,3 +69,14 @@ Antworten am 18.10.2026 erhalten → `DECISIONS.md`.
 - **Anleitung** `ANLEITUNG-IPHONE.md`, Kurzfassung in Einstellungen → Über die App.
 - **Geprüft gegen den Produktions-Build** (`npx playwright test -c playwright.prod.config.ts`, WebKit, iPhone-Größe): Startwerte-Datei laden → Onboarding → Service Worker aktiv → **offline** neu laden und navigieren → Backup herunterladen → alle Daten löschen → Backup im Onboarding importieren → alle Tabellen wieder vollständig. Keine Seitenfehler.
 - Nicht automatisch prüfbar: echte Installation auf dem iPhone, Teilen-Menü („In Dateien sichern“), Update-Hinweis nach einer echten neuen Version.
+
+## Trainingsplanung v2 (19.10.2026) – lokal, noch nicht veröffentlicht
+
+- **Regeln** (Details in DECISIONS.md): max. 7 Übungen pro Einheit, 2–4 Sätze je Übung nach Rolle, 14–22 Sätze je Einheit (Grundplan ≤ 20), Reihenfolge Grund → Ergänzung → Isolation, Aufwärm-Hinweis bei der ersten Grundübung.
+- **Rollen** in `uebungen.json` (19 Grund-, 46 Ergänzungs-, 92 Isolationsübungen) mit Sätzen, Wiederholungen, Pausen und Ziel-RIR je Rolle; RIR-Erklärung im Übungs-Sheet.
+- **Wochenvolumen:** anteilige Zählung (Zielmuskel 1, mitarbeitend ½), Ziel 10–20 Sätze und 2× pro Woche je Gruppe, Drücken : Ziehen und Quadrizeps : Beinbeuger ≈ 1 : 1; automatischer Ausgleich, Vorschlag bei zu knappem Split; Karte „Sätze pro Muskelgruppe“ in der Statistik, Übersicht in Einstellungen → Trainingsplan und am Ende des Onboardings.
+- **Variation:** Anker bleiben im Zyklus gleich; 2–3 Varianten je Ergänzungs-/Isolationsübung rotieren (höchstens 3 Wechsel pro Einheit, nicht in der Deload-Woche); eigener Verlauf je Variante; „Fixieren“.
+- **Zyklus:** Intro mehr Reserve, Overreaching +1 Satz bei Mehrgelenk, Peak Week unteres Ende/weniger RIR/etwas mehr Gewicht, Deload 40–50 % weniger Sätze bei RIR 3–4.
+- **Progression:** +2,5 kg (Oberkörper) bzw. +5 kg (Unterkörper) bei Mehrgelenksübungen, danach zurück ans untere Ende; Deload/Peak keine Basis.
+- **Migration** bestehender Pläne beim Start und nach Backup-Import; alte Backups bleiben importierbar.
+- Tests: 109 Unit-Tests grün (neu u. a. `planRules.test.ts` mit allen Splits × Tagen × Equipment, `migrate.test.ts`). Browser-Test in iPhone-Größe: Training, Workout-Sheet (RIR, Anker, Varianten, Fixieren, Aufwärmen), 7-Übungen-Grenze, Statistik-Karte, Einstellungen mit Vorschlag, Vorschau mit Varianten.

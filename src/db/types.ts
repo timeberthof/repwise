@@ -74,6 +74,9 @@ export type MovementPattern =
 
 export type Joint = 'schulter' | 'ellenbogen' | 'handgelenk' | 'lws' | 'huefte' | 'knie' | 'sprunggelenk'
 
+/** Rolle in der Einheit: schwere Grundübung, ergänzende Mehrgelenksübung oder Isolationsübung. */
+export type ExerciseRole = 'grund' | 'ergaenzung' | 'isolation'
+
 export interface Exercise {
   id: string
   name: string
@@ -81,6 +84,8 @@ export interface Exercise {
   primaer: MuscleId
   sekundaer: MuscleId[]
   muster: MovementPattern
+  /** Rolle (Kraftübungen); fehlt sie (eigene Übungen), wird sie aus dem Bewegungsmuster abgeleitet. */
+  rolle?: ExerciseRole
   /** Erstes Element = Haupt-Equipment. */
   equipment: EquipmentId[]
   schwierigkeit: 1 | 2 | 3
@@ -178,6 +183,8 @@ export interface Plan {
   status: 'aktiv' | 'pausiert'
   pausedSince?: ISODate
   source: 'onboarding' | 'zyklus' | 'manuell'
+  /** Version der Planungsregeln, nach denen der Plan erstellt bzw. migriert wurde (fehlt = 1). */
+  rulesVersion?: number
 }
 
 export interface PlanDay {
@@ -201,6 +208,14 @@ export interface PlanExercise {
   targetRir: number
   restSec: number
   superset?: boolean
+  /** Rolle in der Einheit (bestimmt Sätze, Wiederholungen, Pause, Reihenfolge) */
+  role?: ExerciseRole
+  /** Ankerübung: bleibt im ganzen Zyklus gleich, damit die Progression messbar ist */
+  anchor?: boolean
+  /** Gleichwertige Varianten im Wechsel (erste = Grundvariante); fehlt = keine Rotation */
+  variants?: string[]
+  /** Von Dir fixiert: wird nicht automatisch variiert */
+  pinned?: boolean
 }
 
 export interface Checkin {
@@ -235,6 +250,7 @@ export type AdjustmentKind =
   | 'tausch'
   | 'manuell'
   | 'plan'
+  | 'variante'
 
 export type SessionStatus = 'geplant' | 'laeuft' | 'fertig' | 'uebersprungen'
 
@@ -276,6 +292,11 @@ export interface SessionExercise {
   superset?: boolean
   adjustments: AdjustmentNote[]
   note?: string
+  /** Herkunft im Plan (für Varianten, Fixieren und dauerhaften Tausch) */
+  planExerciseId?: number
+  role?: ExerciseRole
+  /** Vorgeschlagene Wiederholungen für die offenen Sätze (z. B. unteres Ende nach einer Steigerung) */
+  targetReps?: number
 }
 
 export interface SetEntry {

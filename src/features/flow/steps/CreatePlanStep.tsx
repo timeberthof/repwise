@@ -80,15 +80,26 @@ export function PlanSummaryList({ days }: { days: PlanDayWithExercises[] }) {
                   </span>
                 </p>
                 <ul className="mt-1">
-                  {d.exercises.map((e) => (
-                    <li key={e.id} className="flex justify-between gap-3 py-[3px] text-[14.5px]">
-                      <span className="truncate text-fg">{exerciseName(e.exerciseId)}</span>
-                      <span className="shrink-0 text-fg-2">
-                        {e.sets} × {e.repMin}–{e.repMax}
-                        {getExercise(e.exerciseId)?.einheit === 'sekunden' ? ' s' : ''}
-                      </span>
-                    </li>
-                  ))}
+                  {d.exercises.map((e) => {
+                    const others = (e.variants ?? []).filter((v) => v !== e.exerciseId)
+                    return (
+                      <li key={e.id} className="py-[3px] text-[14.5px]">
+                        <span className="flex justify-between gap-3">
+                          <span className="truncate text-fg">
+                            {exerciseName(e.exerciseId)}
+                            {e.anchor && <span className="ml-1 text-[12px] font-semibold text-amber">ANKER</span>}
+                          </span>
+                          <span className="shrink-0 text-fg-2">
+                            {e.sets} × {e.repMin}–{e.repMax}
+                            {getExercise(e.exerciseId)?.einheit === 'sekunden' ? ' s' : d.kind === 'kraft' ? ` · RIR ${e.targetRir}` : ''}
+                          </span>
+                        </span>
+                        {d.kind === 'kraft' && (e.pinned || others.length > 0) && (
+                          <span className="block truncate text-[12px] text-fg-3">{e.pinned ? 'fixiert' : `im Wechsel mit ${others.map(exerciseName).join(', ')}`}</span>
+                        )}
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             ))}

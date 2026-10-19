@@ -7,7 +7,7 @@ import { Icon } from '../../components/icons/Icon'
 import { ExerciseGlyph } from '../../components/ui/ExerciseGlyph'
 import { db } from '../../db/db'
 import { planForDate } from '../../db/repo/plan'
-import { prescribeExercise } from '../../db/repo/sessions'
+import { planSession } from '../../db/repo/sessions'
 import { setWeekOverride } from '../../db/repo/cycle'
 import { getExercise } from '../../data/exercises'
 import { muscleLabel } from '../../data/muskeln'
@@ -30,8 +30,8 @@ export default function PreviewScreen() {
     if (!day || !plan) return null
     const wt = weekTypeFor(plan, date)
     const type = day.kind === 'kraft' ? wt.type : 'normal'
-    const pes = await db.planExercises.where('planDayId').equals(day.id!).sortBy('order')
-    const items = await Promise.all(pes.map(async (pe) => ({ pe, p: await prescribeExercise(pe, date, type) })))
+    // gleiche Berechnung wie am Trainingstag: Variante des Tages, Progression, Satzgrenzen der Einheit
+    const items = (await planSession(plan, day, date, type)).map((x) => ({ pe: { ...x.pe, exerciseId: x.exerciseId }, p: x.p }))
     return { day, plan, wt, type, items }
   }, [date, dayId])
 

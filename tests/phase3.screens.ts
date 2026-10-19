@@ -70,6 +70,8 @@ test('Training-Tab und Workout', async ({ page }) => {
 })
 
 test('Training komplett durchführen und abschließen', async ({ page }) => {
+  // 7 Übungen × 2–4 Sätze über die Oberfläche – WebKit/IndexedDB unter Windows ist langsam
+  test.setTimeout(150_000)
   await page.clock.setFixedTime(new Date('2026-10-19T09:30:00'))
   await seededApp(page, '/training')
   await dismissStartSheets(page)

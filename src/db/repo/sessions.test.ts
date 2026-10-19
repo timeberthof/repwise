@@ -40,10 +40,14 @@ describe('Einheiten (Datenbank)', () => {
     const bench = list.find((x) => x.exerciseId === 'bankdruecken-multipresse')!
     // Letztes Arbeitsgewicht 50 kg mit 5 Wdh im Bereich 5–8 → Gewicht bleibt
     expect(bench.weight).toBe(50)
-    // Intro-Woche: ein Satz weniger als geplant
-    expect(bench.adjustments.some((a) => a.kind === 'wochentyp' && a.field === 'sets')).toBe(true)
-    const butterfly = list.find((x) => x.exerciseId === 'butterfly')!
-    expect(butterfly.weight).toBe(77.5)
+    // Intro-Woche: eine Wiederholung mehr Reserve (RIR +1)
+    expect(bench.adjustments.some((a) => a.kind === 'wochentyp' && a.field === 'rir')).toBe(true)
+    expect(list.length).toBeLessThanOrEqual(7)
+    // Übungen mit Arbeitsgewicht aus den Startwerten übernehmen es (Basisvariante in der ersten Einheit)
+    const ww = s.arbeitsgewichte as Record<string, { gewicht: number }>
+    const withWw = list.filter((x) => ww[x.exerciseId] && x.exerciseId !== 'bankdruecken-multipresse')
+    expect(withWw.length).toBeGreaterThan(0)
+    for (const x of withWw) expect(x.weight).toBe(ww[x.exerciseId].gewicht)
     const leg = list.find((x) => x.exerciseId === 'beinpresse')!
     expect(leg.weightIsEstimate).toBe(true)
     expect(leg.weight).toBeGreaterThan(100)
@@ -70,15 +74,19 @@ describe('Einheiten (Datenbank)', () => {
     const id = await ensureSession('2026-10-21', entries[0].planDay!.id!)
     const bench = (await db.sessionExercises.where('sessionId').equals(id).toArray()).find((x) => x.exerciseId === 'bankdruecken-multipresse')!
     expect(bench.weight).toBe(52.5)
-    expect(bench.adjustments.find((a) => a.kind === 'progression')?.reason).toBe('+2,5 kg, weil du alle Sätze mit 8 Wdh. geschafft hast.')
+    expect(bench.adjustments.find((a) => a.kind === 'progression')?.reason).toBe('+2,5 kg, weil du alle Sätze mit 8 Wdh. geschafft hast. Jetzt wieder mit 5 Wdh. beginnen.')
+    // nach der Steigerung wieder am unteren Ende des Bereichs
+    expect(bench.targetReps).toBe(5)
   })
 
   it('tauscht eine Übung nur heute oder dauerhaft', async () => {
     const entries = await dayEntries('2026-10-23')
     const id = await ensureSession('2026-10-23', entries[0].planDay!.id!)
-    const se = (await db.sessionExercises.where('sessionId').equals(id).toArray()).find((x) => x.exerciseId === 'butterfly')!
-    await swapExercise(se.id!, 'kabel-crossover', 'heute')
-    expect((await db.sessionExercises.get(se.id!))!.exerciseId).toBe('kabel-crossover')
+    // Butterfly bzw. die heute dran befindliche Variante (Rotation)
+    const pe = (await db.planExercises.where('planDayId').equals(entries[0].planDay!.id!).filter((p) => p.exerciseId === 'butterfly').first())!
+    const se = (await db.sessionExercises.where('sessionId').equals(id).toArray()).find((x) => x.planExerciseId === pe.id)!
+    await swapExercise(se.id!, 'kabel-fliegende-unten', 'heute')
+    expect((await db.sessionExercises.get(se.id!))!.exerciseId).toBe('kabel-fliegende-unten')
     const planHas = await db.planExercises.filter((p) => p.exerciseId === 'butterfly').count()
     expect(planHas).toBeGreaterThan(0)
     await swapExercise(se.id!, 'kurzhantel-fliegende', 'dauerhaft')

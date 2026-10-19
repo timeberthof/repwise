@@ -14,6 +14,7 @@ import { db } from '../../db/db'
 import { nextWeight, roundWeight } from '../../logic/progression'
 import { availableWeights, stepFor } from '../../db/repo/weights'
 import { AdjustmentStrip } from './AdjustmentBox'
+import { ExerciseGuide } from './ExerciseGuide'
 import { ExerciseSettingsSheet, RepsSheet, SetsSheet, WeightsSheet } from './EditSheets'
 import { TimerButton } from './TimerButton'
 import { restTimer, useRestTimer } from './restTimer'
@@ -38,10 +39,12 @@ interface Props {
   onStart: () => void
   onNext: () => void
   onFinish: () => void
+  /** Erste schwere Grundübung der Einheit → Aufwärm-Hinweis */
+  warmup?: boolean
 }
 
 /** Übungs-Sheet zum Eintragen (S30, S45): Chips, Satz-Tabelle, Stepper, Notizen, Starten/Satz/Timer. */
-export function ExerciseSheet({ open, onClose, session, item, isLast, onStart, onNext, onFinish }: Props) {
+export function ExerciseSheet({ open, onClose, session, item, isLast, onStart, onNext, onFinish, warmup }: Props) {
   const toast = useToast()
   const [sel, setSel] = useState<number | null>(null)
   const [vals, setVals] = useState({ reps: 8, weight: 0 as number | null, rir: 2 as number | null })
@@ -182,6 +185,8 @@ export function ExerciseSheet({ open, onClose, session, item, isLast, onStart, o
           )}
         </div>
 
+        <ExerciseGuide item={item} warmup={!!warmup} finished={finished} />
+
         {/* Satz-Tabelle */}
         <div className="mt-[28px] px-6">
           <div className={`grid ${mobility ? 'grid-cols-2' : 'grid-cols-4'} text-center text-card font-medium uppercase`}>
@@ -266,7 +271,7 @@ export function ExerciseSheet({ open, onClose, session, item, isLast, onStart, o
         </div>
       </BottomSheet>
 
-      <SetsSheet open={sheet === 'sets'} onClose={() => setSheet(null)} item={item} onSave={(n) => setExerciseSets(item.id!, n)} />
+      <SetsSheet open={sheet === 'sets'} onClose={() => setSheet(null)} item={item} weekType={session.weekType} onSave={(n) => setExerciseSets(item.id!, n)} />
       <RepsSheet open={sheet === 'reps'} onClose={() => setSheet(null)} item={item} onSave={(a, b) => setExerciseRange(item.id!, a, b)} />
       <WeightsSheet open={sheet === 'weights'} onClose={() => (setSheet(null), availableWeights(item.exerciseId).then((w) => setWeights(w ?? [])))} exercise={item.exercise} />
       <ExerciseSettingsSheet open={sheet === 'settings'} onClose={() => setSheet(null)} item={item} onWeights={() => setSheet('weights')} />

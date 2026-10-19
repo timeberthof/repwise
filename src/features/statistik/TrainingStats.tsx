@@ -8,6 +8,7 @@ import { useToast } from '../../components/ui/Toast'
 import { fmt } from '../../logic/format'
 import { ValueLineChart, DayBarChart } from './charts'
 import { Delta, Kpi, StatCard } from './StatCard'
+import { MuscleVolumeCard } from './MuscleVolumeCard'
 import { formatDayMonth } from '../../logic/dates'
 
 export const STRENGTH_HINT = 'Maximalkraft = geschätztes Gewicht für 1 Wiederholung: Gewicht × (1 + (Wdh + RIR) / 30), Durchschnitt aller Arbeitssätze einer Einheit.'
@@ -28,6 +29,9 @@ export function TrainingStats() {
             <Kpi value={summary.total4w} label="Trainings" hint="abgeschlossen, letzte 4 Wochen" />
             <Kpi value={summary.sets4w} label="Sätze" hint="erledigt, letzte 4 Wochen" />
             <Kpi value={`${fmt(Math.round(summary.volume4w / 1000), 0)} t`} label="Volumen" hint="Gewicht × Wdh, letzte 4 Wochen" />
+          </div>
+          <div className="mt-[14px] px-4">
+            <MuscleVolumeCard />
           </div>
           <div className="mt-[14px] px-4">
             <StatCard title="Trainings pro Woche" sub={`Abgeschlossene Krafttrainings je Woche · letzte 8 Wochen${summary.avgMin ? ` · Ø ${summary.avgMin} Min pro Einheit` : ''}`}>

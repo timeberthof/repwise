@@ -65,7 +65,7 @@ describe('Planerstellung', () => {
   })
 
   it('Volumen passt zur Erfahrung', () => {
-    const sets = (exp: PlanInput['experience']) => generatePlan({ ...base, experience: exp, focus: [] })[0].exercises[0].sets
+    const sets = (exp: PlanInput['experience']) => generatePlan({ ...base, experience: exp, focus: [] }).flatMap((d) => d.kind === 'kraft' ? d.exercises : []).reduce((s, e) => s + e.sets, 0)
     expect(sets('anfaenger')).toBeLessThan(sets('profi'))
   })
 

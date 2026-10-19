@@ -25,6 +25,7 @@ export async function exerciseHistory(exerciseId: string, beforeDate: ISODate, l
       targetRir: se.targetRir,
       e1rm: sessionE1rm(sets),
       stagnationReset: se.adjustments.some((a) => a.kind === 'stagnation'),
+      weekType: s.kind === 'kraft' ? s.weekType : undefined,
     })
   }
   rows.sort((a, b) => a.date.localeCompare(b.date))
@@ -42,6 +43,16 @@ export async function exerciseHistory(exerciseId: string, beforeDate: ISODate, l
     }
   }
   return { history: { sessions: [] }, lastDate: lastStrength?.date ?? null }
+}
+
+/** Letzter Tag vor `beforeDate`, an dem eine der Übungen trainiert wurde (erledigte Sätze). */
+export async function lastTrainedDate(exerciseIds: string[], beforeDate: ISODate): Promise<ISODate | null> {
+  let last: ISODate | null = null
+  for (const id of exerciseIds) {
+    const sets = await db.sets.where('exerciseId').equals(id).filter((x) => x.done && x.date < beforeDate).toArray()
+    for (const x of sets) if (!last || x.date > last) last = x.date
+  }
+  return last
 }
 
 /** Letzte bekannte Maximalkraft einer Übung (eigene oder importierte Werte). */

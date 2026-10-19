@@ -1,15 +1,106 @@
 import { db } from '../db'
-import type { AdjustmentNote, Checkin, ISODate, Plan, PlanDay, PlanExercise, Session, SessionExercise, SetEntry, WeekType } from '../types'
+import type { AdjustmentNote, Checkin, ExerciseRole, ISODate, Plan, PlanDay, PlanExercise, Session, SessionExercise, SetEntry, WeekType } from '../types'
 import { getExercise } from '../../data/exercises'
-import { prescribe, WEEK_TYPE_INFO, type PrescribeResult } from '../../logic/progression'
+import { limitSessionSets, prescribe, PROGRESSION_CONFIG, WEEK_TYPE_INFO, type PrescribeResult } from '../../logic/progression'
 import { weekTypeFor } from '../../logic/cycle'
 import { addDays, formatDate, today, weekdayIndex } from '../../logic/dates'
 import { sessionE1rm } from '../../logic/e1rm'
 import { estimateMinutes } from '../../logic/planGenerator'
-import { daysBetween, exerciseHistory, lastE1rm, relatedE1rm } from './history'
+import { prescriptionForRole, roleOf } from '../../logic/roles'
+import { occurrenceIndex, resolveVariants } from '../../logic/variants'
+import { daysBetween, exerciseHistory, lastE1rm, lastTrainedDate, relatedE1rm } from './history'
 import { availableWeights, withStep } from './weights'
 import { pausedDates } from '../derived'
-import { planForDate } from './plan'
+import { planForDate, variantsForPlan } from './plan'
+
+/** Fehler, wenn eine Einheit schon die Höchstzahl an Übungen hat. */
+export class TooManyExercisesError extends Error {
+  constructor() {
+    super(`Höchstens ${PROGRESSION_CONFIG.planning.maxExercises} Übungen pro Einheit`)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Varianten: welche Übung ist an einem Tag dran?
+
+export interface ResolvedPlanExercise {
+  pe: PlanExercise
+  /** Übung an diesem Tag (Variante) */
+  exerciseId: string
+  /** Übung bei der letzten Einheit dieses Typs (für den Hinweis „gewechselt“) */
+  previousId: string
+}
+
+/** Varianten eines Plantags für ein Datum auflösen (Anker, fixierte Übungen und Deload-Wochen wechseln nicht). */
+export async function resolvedPlanExercises(plan: Plan, day: PlanDay, date: ISODate): Promise<ResolvedPlanExercise[]> {
+  const pes = await db.planExercises.where('planDayId').equals(day.id!).sortBy('order')
+  if (day.kind !== 'kraft' || !plan.id) return pes.map((pe) => ({ pe, exerciseId: pe.exerciseId, previousId: pe.exerciseId }))
+  const same = await db.planDays.where('planId').equals(plan.id).filter((d) => d.kind === 'kraft' && d.name === day.name).toArray()
+  const occ = occurrenceIndex({ startDate: plan.startDate, date, weekdays: [...new Set(same.map((d) => d.weekday))], weekTypeOf: (d) => weekTypeFor(plan, d).type })
+  const now = resolveVariants(pes, occ)
+  const before = occ > 0 ? resolveVariants(pes, occ - 1) : now
+  return pes.map((pe, i) => ({ pe, exerciseId: now[i], previousId: before[i] }))
+}
+
+export interface PlannedItem extends ResolvedPlanExercise {
+  p: PrescribeResult
+  role: ExerciseRole | undefined
+}
+
+/**
+ * Vorgaben einer geplanten Einheit (ohne zu speichern): Varianten, Progression je Übung,
+ * dann die Satzgrenzen der ganzen Einheit nach dem Wochentyp (z. B. Deload 40–50 % weniger Sätze).
+ */
+export async function planSession(plan: Plan, day: PlanDay, date: ISODate, weekType: WeekType, checkin?: Checkin): Promise<PlannedItem[]> {
+  const resolved = await resolvedPlanExercises(plan, day, date)
+  const items: PlannedItem[] = await Promise.all(
+    resolved.map(async (r) => {
+      const ex = getExercise(r.exerciseId)
+      const role = day.kind === 'kraft' && ex?.art === 'kraft' ? (r.pe.role ?? roleOf(ex)) : undefined
+      const p = await prescribeExercise({ ...r.pe, exerciseId: r.exerciseId }, date, weekType, checkin, { role, variantIds: r.pe.variants })
+      if (r.exerciseId !== r.pe.exerciseId) {
+        p.notes.unshift({
+          kind: 'variante',
+          field: 'uebung',
+          before: null,
+          after: null,
+          title: 'Variante zur Abwechslung',
+          reason: `Heute die Variante „${getExercise(r.exerciseId)?.name ?? r.exerciseId}“ statt „${getExercise(r.pe.exerciseId)?.name ?? r.pe.exerciseId}“ – gleiche Zielmuskeln, eigener Verlauf.`,
+        })
+      }
+      return { ...r, p, role }
+    }),
+  )
+  if (day.kind === 'kraft') applySessionLimits(items, weekType)
+  return items
+}
+
+/** Satzgrenzen der ganzen Einheit anwenden und die Hinweise anpassen. */
+function applySessionLimits(items: { pe: Pick<PlanExercise, 'sets'>; p: PrescribeResult; role: ExerciseRole | undefined; fixed?: boolean }[], weekType: WeekType) {
+  const planned = items.map((x) => (x.fixed ? x.p.sets : x.pe.sets))
+  const limited = limitSessionSets(
+    planned,
+    items.map((x) => x.p.sets),
+    weekType,
+    items.map((x) => x.role),
+  )
+  items.forEach((x, i) => {
+    if (x.fixed || limited[i] === x.p.sets) return
+    const note = x.p.notes.find((n) => n.field === 'sets' && n.kind === 'wochentyp')
+    if (note && note.before === limited[i]) x.p.notes.splice(x.p.notes.indexOf(note), 1)
+    else if (note) note.after = limited[i]
+    else
+      x.p.notes.push({
+        kind: 'wochentyp',
+        field: 'sets',
+        before: x.pe.sets,
+        after: limited[i],
+        title: 'Satzzahl angepasst',
+        reason: `Die Anzahl deiner Sätze wurde ${WEEK_TYPE_INFO[weekType].reason || 'für die Einheit'} angepasst.`,
+      })
+    x.p.sets = limited[i]
+  })
+}
 
 // ---------------------------------------------------------------------------
 // Tagesansicht: geplante Einheiten (aus dem Plan) + tatsächliche Einheiten
@@ -49,7 +140,8 @@ export async function dayEntries(date: ISODate): Promise<DayEntry[]> {
       if (movedAway.some((s) => s.planDayId === d.id)) continue
       const session = sessions.find((s) => s.planDayId === d.id && !usedSessions.has(s.id!))
       if (session) usedSessions.add(session.id!)
-      const planExercises = await db.planExercises.where('planDayId').equals(d.id!).sortBy('order')
+      // Übungen dieses Tages mit der heute dran befindlichen Variante
+      const planExercises = (await resolvedPlanExercises(plan, d, date)).map((r) => ({ ...r.pe, exerciseId: r.exerciseId }))
       const sessionExercises = session ? await db.sessionExercises.where('sessionId').equals(session.id!).sortBy('order') : undefined
       entries.push({
         key: session ? `s${session.id}` : `p${d.id}`,
@@ -87,11 +179,15 @@ export async function dayEntries(date: ISODate): Promise<DayEntry[]> {
   return entries
 }
 
-/** Sätze für die Zeitschätzung an den Wochentyp anpassen (Deload ≈ halbes Volumen …). */
-function adjustForWeek(list: PlanExercise[], type: WeekType) {
-  const f = type === 'deload' ? 0.5 : 1
-  const d = type === 'overreaching' ? 1 : type === 'intro' ? -1 : 0
-  return list.map((e) => ({ ...e, sets: Math.max(1, Math.round(e.sets * f + d)) }))
+/** Sätze für die Zeitschätzung an den Wochentyp anpassen (Deload ≈ 45 % weniger, Overreaching +1 bei Mehrgelenk). */
+export function adjustForWeek<T extends Pick<PlanExercise, 'sets' | 'role'>>(list: T[], type: WeekType): T[] {
+  const t = PROGRESSION_CONFIG.weekTypes[type]
+  return list.map((e) => {
+    let sets = e.sets
+    if (t.setsReduction) sets = Math.max(1, Math.round(sets * (1 - t.setsReduction)))
+    if (t.compoundSetsDelta && e.role !== 'isolation') sets = Math.min(PROGRESSION_CONFIG.planning.maxSetsPerExercise, sets + t.compoundSetsDelta)
+    return { ...e, sets }
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +198,7 @@ export async function prescribeExercise(
   date: ISODate,
   weekType: WeekType,
   checkin?: Checkin,
+  opts: { role?: ExerciseRole; variantIds?: string[] } = {},
 ): Promise<PrescribeResult> {
   const lib = getExercise(pe.exerciseId)
   if (!lib || lib.art === 'mobility') {
@@ -113,6 +210,9 @@ export async function prescribeExercise(
   const own = await lastE1rm(ex.id)
   const related = own ? null : await relatedE1rm(ex)
   const available = ex.gewichtsschritt ? ((await availableWeights(ex.id)) ?? undefined) : undefined
+  // Trainingspause über alle Varianten gemessen – eine rotierende Variante ist nicht „pausiert“
+  const lastGroupDate = opts.variantIds?.length ? await lastTrainedDate([...new Set([ex.id, ...opts.variantIds])], date) : null
+  const last = [lastDate, lastGroupDate].filter((d): d is string => !!d).sort().at(-1) ?? null
   return prescribe({
     exercise: ex,
     repMin: pe.repMin,
@@ -121,9 +221,10 @@ export async function prescribeExercise(
     plannedSets: pe.sets,
     history,
     available,
+    role: opts.role ?? roleOf(ex),
     weekType,
     checkin,
-    daysSinceLast: daysBetween(lastDate, date),
+    daysSinceLast: daysBetween(last, date),
     calibration: { ownE1rm: own?.value, related },
   })
 }
@@ -137,8 +238,7 @@ export async function ensureSession(date: ISODate, planDayId: number): Promise<n
   if (!day || !plan) throw new Error('Plantag nicht gefunden')
   const wt = weekTypeFor(plan, date)
   const weekType = day.kind === 'kraft' ? wt.type : 'normal'
-  const pes = await db.planExercises.where('planDayId').equals(planDayId).sortBy('order')
-  const prescriptions = await Promise.all(pes.map((pe) => prescribeExercise(pe, date, weekType)))
+  const items = await planSession(plan, day, date, weekType)
   return db.transaction('rw', [db.sessions, db.sessionExercises], async () => {
     const sessionId = (await db.sessions.add({
       date,
@@ -150,26 +250,26 @@ export async function ensureSession(date: ISODate, planDayId: number): Promise<n
       weekTypeManual: wt.manual,
       status: 'geplant',
       location: day.location,
-      estMinutes: estimateMinutes(pes.map((pe, i) => ({ sets: prescriptions[i].sets, restSec: pe.restSec }))),
+      estMinutes: estimateMinutes(items.map((x) => ({ sets: x.p.sets, restSec: x.pe.restSec }))),
     })) as number
     await db.sessionExercises.bulkAdd(
-      pes.map((pe, i) => {
-        const p = prescriptions[i]
-        return {
-          sessionId,
-          exerciseId: pe.exerciseId,
-          order: i,
-          sets: p.sets,
-          repMin: p.repMin,
-          repMax: p.repMax,
-          targetRir: p.targetRir,
-          restSec: pe.restSec,
-          weight: p.weight,
-          weightIsEstimate: p.isEstimate,
-          superset: pe.superset,
-          adjustments: p.notes,
-        } as SessionExercise
-      }),
+      items.map(({ pe, exerciseId, p, role }, i) => ({
+        sessionId,
+        exerciseId,
+        order: i,
+        sets: p.sets,
+        repMin: p.repMin,
+        repMax: p.repMax,
+        targetRir: p.targetRir,
+        restSec: pe.restSec,
+        weight: p.weight,
+        weightIsEstimate: p.isEstimate,
+        superset: pe.superset,
+        adjustments: p.notes,
+        planExerciseId: pe.id,
+        role,
+        targetReps: p.targetReps,
+      })),
     )
     return sessionId
   })
@@ -201,22 +301,38 @@ export async function recomputeSession(sessionId: number) {
   if (!s) return
   const list = await db.sessionExercises.where('sessionId').equals(sessionId).sortBy('order')
   const pes = s.planDayId ? await db.planExercises.where('planDayId').equals(s.planDayId).toArray() : []
-  for (const se of list) {
-    const doneSets = await db.sets.where('sessionExerciseId').equals(se.id!).filter((x) => x.done).count()
-    if (doneSets > 0) continue
-    const pe = pes.find((p) => p.exerciseId === se.exerciseId)
-    const base = { exerciseId: se.exerciseId, sets: pe?.sets ?? baseSets(se), repMin: se.repMin, repMax: se.repMax, targetRir: pe?.targetRir ?? 2 }
-    const p = await prescribeExercise(base, s.date, s.kind === 'kraft' ? s.weekType : 'normal', s.checkin)
-    const manual = se.adjustments.filter((a) => a.kind === 'manuell' || a.kind === 'tausch')
-    // Von Hand überschriebene Werte bleiben erhalten
-    const keepWeight = manual.some((a) => a.kind === 'manuell' && a.field === 'weight')
-    const keepSets = manual.some((a) => a.kind === 'manuell' && a.field === 'sets')
+  const weekType = s.kind === 'kraft' ? s.weekType : 'normal'
+  const work = await Promise.all(
+    list.map(async (se) => {
+      const doneSets = await db.sets.where('sessionExerciseId').equals(se.id!).filter((x) => x.done).count()
+      const pe = pes.find((p) => p.id === se.planExerciseId) ?? pes.find((p) => p.exerciseId === se.exerciseId)
+      const ex = getExercise(se.exerciseId)
+      const role = se.role ?? (ex && ex.art === 'kraft' ? roleOf(ex) : undefined)
+      const manual = se.adjustments.filter((a) => a.kind === 'manuell' || a.kind === 'tausch')
+      // Von Hand überschriebene Werte bleiben erhalten; begonnene Übungen werden nicht neu berechnet
+      const keepWeight = manual.some((a) => a.kind === 'manuell' && a.field === 'weight')
+      const keepSets = manual.some((a) => a.kind === 'manuell' && a.field === 'sets')
+      const fixed = doneSets > 0
+      const base = { exerciseId: se.exerciseId, sets: pe?.sets ?? baseSets(se), repMin: se.repMin, repMax: se.repMax, targetRir: pe?.targetRir ?? se.targetRir }
+      const p = fixed
+        ? { sets: se.sets, repMin: se.repMin, repMax: se.repMax, targetRir: se.targetRir, weight: se.weight, notes: se.adjustments, isEstimate: se.weightIsEstimate, targetReps: se.targetReps }
+        : await prescribeExercise(base, s.date, weekType, s.checkin, { role, variantIds: pe?.variants })
+      if (!fixed && keepSets) p.sets = se.sets
+      return { se, pe: { sets: base.sets }, p, role, fixed: fixed || keepSets, keepWeight, keepSets, manual }
+    }),
+  )
+  if (s.kind === 'kraft') applySessionLimits(work, weekType)
+  for (const w of work) {
+    if (w.fixed && !w.keepSets) continue
+    const { se, p } = w
+    const variant = se.adjustments.filter((a) => a.kind === 'variante')
     await db.sessionExercises.update(se.id!, {
-      sets: keepSets ? se.sets : p.sets,
+      sets: w.keepSets ? se.sets : p.sets,
       targetRir: p.targetRir,
-      weight: keepWeight ? se.weight : p.weight,
-      weightIsEstimate: keepWeight ? false : p.isEstimate,
-      adjustments: [...p.notes.filter((n) => !(keepWeight && n.field === 'weight') && !(keepSets && n.field === 'sets')), ...manual],
+      weight: w.keepWeight ? se.weight : p.weight,
+      weightIsEstimate: w.keepWeight ? false : p.isEstimate,
+      targetReps: p.targetReps,
+      adjustments: [...variant, ...p.notes.filter((n) => n.kind !== 'variante' && !(w.keepWeight && n.field === 'weight') && !(w.keepSets && n.field === 'sets')), ...w.manual],
     })
     if (s.status === 'laeuft') await syncPlannedSets(se.id!)
   }
@@ -247,7 +363,8 @@ export async function syncPlannedSets(sessionExerciseId: number) {
   const done = sets.filter((x) => x.done)
   const open = sets.filter((x) => !x.done)
   const lastReps = await previousReps(se.exerciseId, s.date)
-  const reps = (i: number) => clamp(lastReps[i] ?? se.repMin, se.repMin, se.repMax)
+  // Nach einer Steigerung bzw. in der Intensivwoche: unteres Ende des Bereichs, sonst Wiederholungen der letzten Einheit
+  const reps = (i: number) => (se.targetReps ? clamp(se.targetReps, se.repMin, se.repMax) : clamp(lastReps[i] ?? se.repMin, se.repMin, se.repMax))
   const wanted = Math.max(se.sets, done.length)
   await db.transaction('rw', db.sets, async () => {
     for (const o of open) await db.sets.delete(o.id!)
@@ -279,9 +396,20 @@ export async function uncompleteSet(setId: number) {
 }
 
 /** Sätze ändern (S35) – „Bestätigen“. */
-export async function setExerciseSets(sessionExerciseId: number, sets: number) {
+/** Erlaubte Satzzahl bei manuellen Änderungen: 2–4 (in der Deload-Woche ab 1). */
+export function manualSetRange(weekType: WeekType, doneCount = 0): [number, number] {
+  const P = PROGRESSION_CONFIG.planning
+  const lo = weekType === 'deload' ? 1 : P.minSetsPerExercise
+  return [Math.max(lo, doneCount), Math.max(P.maxSetsPerExercise, doneCount)]
+}
+
+export async function setExerciseSets(sessionExerciseId: number, requested: number) {
   const se = await db.sessionExercises.get(sessionExerciseId)
   if (!se) return
+  const s = await db.sessions.get(se.sessionId)
+  const done = await db.sets.where('sessionExerciseId').equals(sessionExerciseId).filter((x) => x.done).count()
+  const [lo, hi] = manualSetRange(s?.weekType ?? 'normal', done)
+  const sets = Math.min(hi, Math.max(lo, requested))
   const note: AdjustmentNote = { kind: 'manuell', field: 'sets', before: se.sets, after: sets, title: 'Von Dir geändert', reason: `Satzzahl von ${se.sets} auf ${sets} geändert.` }
   await db.sessionExercises.update(sessionExerciseId, { sets, adjustments: [...se.adjustments.filter((a) => !(a.kind === 'manuell' && a.field === 'sets')), note] })
   await syncPlannedSets(sessionExerciseId)
@@ -309,14 +437,25 @@ export async function setExerciseWeight(sessionExerciseId: number, weight: numbe
   for (const o of open) await db.sets.update(o.id!, { weight })
 }
 
-export async function addExerciseToSession(sessionId: number, exerciseId: string) {
+/** Darf in diese Einheit noch eine Übung? (Krafteinheiten: höchstens 7) */
+export async function canAddExercise(sessionId: number): Promise<boolean> {
+  const s = await db.sessions.get(sessionId)
+  if (!s || s.kind !== 'kraft') return true
+  return (await db.sessionExercises.where('sessionId').equals(sessionId).count()) < PROGRESSION_CONFIG.planning.maxExercises
+}
+
+export async function addExerciseToSession(sessionId: number, exerciseId: string, opts: { ignoreLimit?: boolean } = {}) {
   const s = await db.sessions.get(sessionId)
   if (!s) return
+  if (!opts.ignoreLimit && !(await canAddExercise(sessionId))) throw new TooManyExercisesError()
   const count = await db.sessionExercises.where('sessionId').equals(sessionId).count()
   const ex = getExercise(exerciseId)
   const mobility = ex?.art === 'mobility'
-  const base = { exerciseId, sets: 3, repMin: mobility ? 8 : 8, repMax: mobility ? 12 : 12, targetRir: mobility ? 0 : 2 }
-  const p = await prescribeExercise(base, s.date, s.kind === 'kraft' ? s.weekType : 'normal', s.checkin)
+  const profile = await db.profile.get('me')
+  // Kraftübungen bekommen die Vorgaben ihrer Rolle (Sätze, Wiederholungen, RIR, Pause)
+  const rp = ex && !mobility ? prescriptionForRole(ex, profile?.experience ?? 'fortgeschritten', !!profile?.focus.includes(ex.primaer)) : null
+  const base = { exerciseId, sets: rp?.sets ?? 3, repMin: rp?.repMin ?? 8, repMax: rp?.repMax ?? 12, targetRir: rp?.targetRir ?? (mobility ? 0 : 2) }
+  const p = await prescribeExercise(base, s.date, s.kind === 'kraft' ? s.weekType : 'normal', s.checkin, { role: rp?.role })
   const id = (await db.sessionExercises.add({
     sessionId,
     exerciseId,
@@ -325,11 +464,13 @@ export async function addExerciseToSession(sessionId: number, exerciseId: string
     repMin: p.repMin,
     repMax: p.repMax,
     targetRir: p.targetRir,
-    restSec: mobility ? 15 : 120,
+    restSec: mobility ? 15 : (rp?.restSec ?? 120),
     weight: p.weight,
     weightIsEstimate: p.isEstimate,
     adjustments: p.notes,
     superset: s.kind === 'mobility',
+    role: rp?.role,
+    targetReps: p.targetReps,
   })) as number
   if (s.status === 'laeuft') await syncPlannedSets(id)
 }
@@ -350,9 +491,14 @@ export async function swapExercise(sessionExerciseId: number, newExerciseId: str
   if (!se || !s) return
   const ex = getExercise(newExerciseId)
   const mobility = ex?.art === 'mobility'
-  const range = mobility && ex?.einheit === 'sekunden' ? { repMin: 30, repMax: 45 } : { repMin: se.repMin, repMax: se.repMax }
-  const pe = { exerciseId: newExerciseId, sets: baseSets(se), ...range, targetRir: se.targetRir }
-  const p = await prescribeExercise(pe, s.date, s.kind === 'kraft' ? s.weekType : 'normal', s.checkin)
+  // Andere Rolle (z. B. Isolation statt Grundübung) → deren Bereich und Pause; sonst bleibt der bisherige Bereich
+  const newRole = ex && !mobility ? roleOf(ex) : undefined
+  const roleChanged = !!newRole && newRole !== se.role
+  const profile = await db.profile.get('me')
+  const rp = ex && roleChanged ? prescriptionForRole(ex, profile?.experience ?? 'fortgeschritten', false, newRole) : null
+  const range = mobility && ex?.einheit === 'sekunden' ? { repMin: 30, repMax: 45 } : rp ? { repMin: rp.repMin, repMax: rp.repMax } : { repMin: se.repMin, repMax: se.repMax }
+  const pe = { exerciseId: newExerciseId, sets: baseSets(se), ...range, targetRir: rp?.targetRir ?? se.targetRir }
+  const p = await prescribeExercise(pe, s.date, s.kind === 'kraft' ? s.weekType : 'normal', s.checkin, { role: newRole })
   const note: AdjustmentNote = {
     kind: 'tausch',
     field: 'weight',
@@ -365,8 +511,9 @@ export async function swapExercise(sessionExerciseId: number, newExerciseId: str
   await db.sets.where('sessionExerciseId').equals(sessionExerciseId).filter((x) => !x.done).delete()
   const doneCount = await db.sets.where('sessionExerciseId').equals(sessionExerciseId).count()
   if (doneCount > 0) {
+    // Tausch mitten in der Übung: erledigte Sätze bleiben bei der alten Übung, die neue nimmt ihren Platz ein
     await db.sessionExercises.update(sessionExerciseId, { sets: doneCount })
-    await addExerciseToSession(s.id!, newExerciseId)
+    await addExerciseToSession(s.id!, newExerciseId, { ignoreLimit: true })
   } else {
     await db.sessionExercises.update(sessionExerciseId, {
       exerciseId: newExerciseId,
@@ -378,6 +525,9 @@ export async function swapExercise(sessionExerciseId: number, newExerciseId: str
       weight: p.weight,
       weightIsEstimate: p.isEstimate,
       adjustments: [...p.notes, note],
+      role: newRole,
+      targetReps: p.targetReps,
+      ...(rp ? { restSec: rp.restSec } : {}),
     })
     if (s.status === 'laeuft') await syncPlannedSets(sessionExerciseId)
   }
@@ -394,13 +544,57 @@ export async function swapExercise(sessionExerciseId: number, newExerciseId: str
     reason: `${getExercise(se.exerciseId)?.name ?? se.exerciseId} → ${ex?.name ?? newExerciseId}${scope === 'dauerhaft' ? ' – im Plan ersetzt' : ''}`,
   })
   if (scope === 'dauerhaft' && s.planId) {
-    // Im Plan steht noch die ursprüngliche Übung (falls heute schon einmal getauscht wurde)
+    // Im Plan steht noch die ursprüngliche Übung bzw. die Grundvariante (falls heute eine Variante dran war)
     const inPlan = se.swappedFrom ?? se.exerciseId
+    // Grundvariante im Plan: dauerhaft ersetzt wird sie in allen Einheiten des Plans
+    const basePlanExercise = se.planExerciseId ? (await db.planExercises.get(se.planExerciseId))?.exerciseId : undefined
     const days = await db.planDays.where('planId').equals(s.planId).toArray()
-    for (const d of days) await db.planExercises.where('planDayId').equals(d.id!).filter((x) => x.exerciseId === inPlan).modify({ exerciseId: newExerciseId, ...range })
+    const replaced = new Set<number>()
+    for (const d of days) {
+      const list = await db.planExercises.where('planDayId').equals(d.id!).toArray()
+      for (const pe of list) {
+        const hit = pe.id === se.planExerciseId || pe.exerciseId === inPlan || (!!basePlanExercise && pe.exerciseId === basePlanExercise)
+        if (!hit) continue
+        const others = list.filter((x) => x.id !== pe.id).map((x) => x.exerciseId)
+        const variants = await variantsForPlan(newExerciseId, others, !!pe.anchor)
+        await db.planExercises.update(pe.id!, { exerciseId: newExerciseId, variants, role: newRole, ...range, ...(rp ? { restSec: rp.restSec, targetRir: rp.targetRir } : {}) })
+        replaced.add(pe.id!)
+      }
+    }
     // Bereits angelegte, noch nicht begonnene Einheiten ebenfalls umstellen
     const future = await db.sessions.filter((x) => x.planId === s.planId && x.status === 'geplant' && x.id !== s.id && x.date >= today()).toArray()
-    for (const f of future) await db.sessionExercises.where('sessionId').equals(f.id!).filter((x) => x.exerciseId === inPlan).modify({ exerciseId: newExerciseId })
+    for (const f of future) await db.sessionExercises.where('sessionId').equals(f.id!).filter((x) => (x.planExerciseId !== undefined && replaced.has(x.planExerciseId)) || x.exerciseId === inPlan).modify({ exerciseId: newExerciseId, role: newRole })
+  }
+}
+
+/**
+ * Übung im Plan fixieren (wird nicht mehr automatisch variiert) bzw. wieder freigeben.
+ * Beim Fixieren gilt die gerade angezeigte Variante als feste Übung.
+ */
+export async function setExercisePinned(planExerciseId: number, pinned: boolean, currentExerciseId?: string) {
+  const pe = await db.planExercises.get(planExerciseId)
+  if (!pe) return
+  const keep = currentExerciseId ?? pe.exerciseId
+  const variants = [keep, ...(pe.variants ?? [pe.exerciseId]).filter((x) => x !== keep)]
+  await db.planExercises.update(planExerciseId, pinned ? { exerciseId: keep, variants, pinned: true } : { pinned: false })
+  await db.adjustments.add({
+    date: today(),
+    exerciseId: keep,
+    kind: 'manuell',
+    field: 'uebung',
+    before: null,
+    after: null,
+    title: pinned ? 'Übung fixiert' : 'Fixierung aufgehoben',
+    reason: pinned ? `„${getExercise(keep)?.name ?? keep}“ bleibt fest im Plan und wird nicht mehr automatisch variiert.` : `„${getExercise(keep)?.name ?? keep}“ wechselt wieder mit ${(variants.length - 1) || 'keinen'} Variante${variants.length === 2 ? '' : 'n'} ab.`,
+  })
+  // noch nicht begonnene Einheiten dieser Übung neu anlegen lassen
+  const future = await db.sessionExercises.filter((x) => x.planExerciseId === planExerciseId).toArray()
+  for (const se of future) {
+    const s = await db.sessions.get(se.sessionId)
+    if (s && s.status === 'geplant' && s.date > today()) {
+      await db.sessionExercises.where('sessionId').equals(s.id!).delete()
+      await db.sessions.delete(s.id!)
+    }
   }
 }
 

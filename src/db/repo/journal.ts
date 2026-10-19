@@ -130,6 +130,7 @@ export const ADJUSTMENT_KINDS: { id: AdjustmentKind; label: string; auto: boolea
   { id: 'tausch', label: 'Übungstausch', auto: false },
   { id: 'manuell', label: 'Manuell', auto: false },
   { id: 'plan', label: 'Plan', auto: true },
+  { id: 'variante', label: 'Variante', auto: true },
 ]
 
 export async function adjustmentLog(): Promise<Adjustment[]> {

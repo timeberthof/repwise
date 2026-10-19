@@ -61,7 +61,7 @@ export function ExcludeEditor({ value, onChange }: { value: string[]; onChange: 
       </div>
       <p className="mt-3 text-label text-fg-2">{value.length ? `${value.length} ausgeschlossen` : 'Keine Übung ausgeschlossen'}</p>
       <div className="mt-2 overflow-hidden rounded-xl bg-surface">
-        {list.slice(0, 60).map((e) => {
+        {list.map((e) => {
           const on = value.includes(e.id)
           return (
             <button key={e.id} type="button" onClick={() => toggle(e.id)} className="flex w-full items-center justify-between border-b border-elevated px-[18px] py-[11px] text-left last:border-b-0">

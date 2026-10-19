@@ -41,7 +41,8 @@ export function FlowLayout({ step, total, title, subtitle, children, onBack, onC
         <ProgressSegments total={total} current={step} />
       </div>
 
-      <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-6">
+      {/* Kinder schrumpfen nicht (shrink-0): sonst würden Listen mit overflow-hidden auf Bildschirmhöhe gestaucht und ließen sich nicht scrollen */}
+      <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-6 [&>*]:shrink-0">
         <h1 className="mt-[24px] text-flow font-bold leading-[1.2] tracking-[-0.005em]">{title}</h1>
         {subtitle && <p className="mt-[8px] text-body font-light leading-[1.38] text-fg-2">{subtitle}</p>}
         {children}

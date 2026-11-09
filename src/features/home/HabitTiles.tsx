@@ -2,11 +2,9 @@ import type { ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router'
 import { db } from '../../db/db'
-import { useCalories, useDoneDates } from '../../db/derived'
-import { useProfile } from '../../db/hooks'
-import { addDays, startOfWeek, today, weekDates } from '../../logic/dates'
+import { useDoneDates } from '../../db/derived'
+import { addDays, formatDate, startOfWeek, today } from '../../logic/dates'
 import { fmt } from '../../logic/format'
-import { Icon } from '../../components/icons/Icon'
 
 function Tile({ title, sub, children, onClick, dim, className = '' }: { title: string; sub: string; children: ReactNode; onClick?: () => void; dim?: boolean; className?: string }) {
   return (
@@ -31,105 +29,45 @@ function DayGrid({ filled, color }: { filled: Set<string>; color: string }) {
   )
 }
 
-function WeekProgress({ done, goal, color, unit = 'diese Woche' }: { done: number; goal: number; color: string; unit?: string }) {
+function WeekCount({ done, color }: { done: number; color: string }) {
   return (
-    <>
-      <div className="mt-[13px] h-[4px] rounded-full bg-elevated">
-        <div className="h-full rounded-full" style={{ width: `${Math.min(100, (done / Math.max(goal, 1)) * 100)}%`, background: color }} />
-      </div>
-      <p className="mt-[12px] flex items-baseline gap-[6px] whitespace-nowrap">
-        <span className="text-[18px] font-extrabold">
-          {done}/{goal}
-        </span>
-        <span className="text-[14px] text-fg-2">{unit}</span>
-      </p>
-    </>
+    <p className="mt-[14px] flex items-baseline gap-[6px] whitespace-nowrap">
+      <span className="h-[10px] w-[10px] rounded-[2px]" style={{ background: color }} />
+      <span className="text-[18px] font-extrabold">{done}</span>
+      <span className="text-[14px] text-fg-2">diese Woche</span>
+    </p>
   )
 }
 
-export function StepsTile({ onOpen }: { onOpen: () => void }) {
-  const data = useLiveQuery(async () => {
-    const from = addDays(today(), -7)
-    const list = await db.steps.where('date').between(from, today(), true, true).toArray()
-    return list
-  }, [])
-  const yesterday = addDays(today(), -1)
-  const entries = (data ?? []).filter((e) => e.steps)
-  const latest = entries.sort((a, b) => a.date.localeCompare(b.date)).pop()
-  const hasData = !!latest
-  const days = Array.from({ length: 7 }, (_, i) => addDays(today(), -7 + i))
-  const max = Math.max(1, ...days.map((d) => (data ?? []).find((e) => e.date === d)?.steps ?? 0))
-  return (
-    <Tile title="Schritte" sub={latest?.date === yesterday ? 'Gestern' : 'Letzte 7 Tage'} onClick={onOpen} dim={!hasData}>
-      {hasData ? (
-        <>
-          <div className="mt-3 flex h-[52px] items-end gap-[5px] px-1">
-            {days.map((d) => {
-              const v = (data ?? []).find((e) => e.date === d)?.steps ?? 0
-              return <span key={d} className="flex-1 rounded-[3px]" style={{ height: `${Math.max(6, (v / max) * 100)}%`, background: '#613cb0' }} />
-            })}
-          </div>
-          <p className="mt-[10px] flex items-center justify-between whitespace-nowrap">
-            <span>
-              <span className="text-[18px] font-extrabold">{fmt(latest.steps ?? 0)}</span> <span className="text-[14px] text-fg-2">Schritte</span>
-            </span>
-            <Icon name="chevronRight" size={22} className="text-fg" />
-          </p>
-        </>
-      ) : (
-        <>
-          {/* Illustration wie im Original: drei violette Balken über einer Grundlinie */}
-          <div className="absolute left-1/2 top-[34px] flex h-[60px] -translate-x-1/2 items-end gap-[3px] border-b border-[#3a3a3a] px-1">
-            <span className="h-[40%] w-[13px] bg-purple" />
-            <span className="h-full w-[13px] bg-purple" />
-            <span className="h-[68%] w-[13px] bg-purple" />
-          </div>
-          <span className="absolute inset-x-0 top-[104px] px-2 text-center text-card font-bold leading-[1.15]">Noch keine Schritte eingetragen.</span>
-        </>
-      )}
-    </Tile>
-  )
-}
-
-export function CaloriesTile() {
+/** Gewicht: letzter Wert und Veränderung zum vorherigen Eintrag (ohne Bewertung). */
+export function WeightTile() {
   const navigate = useNavigate()
-  const cal = useCalories()
-  const ratio = cal ? cal.target / cal.tdee : 0
-  const r = 41
-  const c = 2 * Math.PI * r
+  const weights = useLiveQuery(() => db.body.where('kind').equals('weight').sortBy('date'), [])
+  const last = weights?.at(-1)
+  const prev = weights?.at(-2)
+  const recent = (weights ?? []).slice(-8)
+  const min = Math.min(...recent.map((w) => w.value))
+  const max = Math.max(...recent.map((w) => w.value))
+  const d = last && prev ? Math.round((last.value - prev.value) * 10) / 10 : null
   return (
-    <Tile title="Kalorien" sub="Ziel pro Tag" onClick={() => navigate('/einstellungen/ziele')}>
-      <div className="relative mx-auto mt-[10px] h-[92px] w-[92px]">
-        <svg viewBox="0 0 92 92" className="absolute inset-0 -rotate-90">
-          <circle cx="46" cy="46" r={r} fill="none" stroke="#272727" strokeWidth="8" />
-          {cal && <circle cx="46" cy="46" r={r} fill="none" stroke="#5bbd52" strokeWidth="8" strokeLinecap="round" strokeDasharray={`${c * Math.min(ratio, 1)} ${c}`} />}
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[19px] font-extrabold leading-none">{cal ? fmt(cal.target) : '–'}</span>
-          <span className="mt-1 text-[13px] text-fg-2">kcal</span>
+    <Tile title="Gewicht" sub={last ? `Zuletzt ${formatDate(last.date)}` : 'Noch kein Eintrag'} onClick={() => navigate('/koerper')}>
+      {recent.length > 1 && (
+        <div className="mt-3 flex h-[44px] items-end gap-[4px]">
+          {recent.map((w) => (
+            <span key={w.id} className="flex-1 rounded-[2px] bg-[#5bbd52]" style={{ height: `${max === min ? 60 : 25 + ((w.value - min) / (max - min)) * 75}%` }} />
+          ))}
         </div>
-      </div>
-      <Icon name="chevronRight" size={24} className="absolute bottom-4 right-4" />
-    </Tile>
-  )
-}
-
-export function WeighInTile({ onOpen }: { onOpen: () => void }) {
-  const weights = useLiveQuery(() => db.body.where('kind').equals('weight').filter((b) => b.date >= addDays(today(), -29)).toArray(), [])
-  const filled = new Set((weights ?? []).map((w) => w.date))
-  const week = weekDates(today())
-  const thisWeek = week.filter((d) => filled.has(d)).length
-  return (
-    <Tile title="Weigh-In" sub="Letzte 30 Tage" onClick={onOpen}>
-      <DayGrid filled={filled} color="#5bbd52" />
-      <WeekProgress done={thisWeek} goal={7} color="#5bbd52" />
+      )}
+      <p className="mt-auto flex items-baseline gap-[6px] whitespace-nowrap pt-3">
+        <span className="text-[22px] font-extrabold">{last ? fmt(last.value, 1) : '–'}</span>
+        <span className="text-[14px] text-fg-2">kg{d !== null ? ` · ${d > 0 ? '+' : d < 0 ? '−' : '±'}${fmt(Math.abs(d), 1)}` : ''}</span>
+      </p>
     </Tile>
   )
 }
 
 export function TrainingsTile() {
   const navigate = useNavigate()
-  const profile = useProfile()
   const done = useDoneDates()
   const filled = done ?? new Set<string>()
   const weekStart = startOfWeek(today())
@@ -137,7 +75,7 @@ export function TrainingsTile() {
   return (
     <Tile title="Trainings" sub="Letzte 30 Tage" onClick={() => navigate('/training')}>
       <DayGrid filled={filled} color="#ed774d" />
-      <WeekProgress done={thisWeek} goal={profile?.daysPerWeek ?? 0} color="#ed774d" />
+      <WeekCount done={thisWeek} color="#ed774d" />
     </Tile>
   )
 }

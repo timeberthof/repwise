@@ -11,7 +11,7 @@ import { db } from '../../db/db'
 import { useProfile } from '../../db/hooks'
 import type { CardioActivity, CardioEntry } from '../../db/types'
 import { ageOn, formatLong, today } from '../../logic/dates'
-import { hrMax, intensityForZone, zoneOf, zoneRange, ZONES, type ZoneNumber } from '../../logic/heartRate'
+import { hrMax, zoneOf, zoneRange, ZONES, type ZoneNumber } from '../../logic/heartRate'
 import { fmt } from '../../logic/format'
 import { CARDIO_ACTIVITIES } from './activities'
 
@@ -50,7 +50,7 @@ function NumInput({ value, onChange, unit, decimals = false }: { value: number |
   )
 }
 
-/** Cardio eintragen/bearbeiten (Werte von der Garmin). Vorher Vorschlag einer Ziel-Pulszone. */
+/** Cardio eintragen/bearbeiten (Werte von der Garmin). Keine Vorgaben – die Pulszone ergibt sich aus dem Ø-Puls. */
 export default function CardioForm() {
   const { id } = useParams()
   const [params] = useSearchParams()
@@ -68,19 +68,17 @@ export default function CardioForm() {
         const e = await db.cardio.get(Number(id))
         if (e) return setForm(e)
       }
-      const zone = (profile.cardioZone ?? 2) as ZoneNumber
-      const max = hrMax(ageOn(profile.birthDate), profile.hrMaxOverride)
-      const r = zoneRange(zone, max, profile.hrZones)
       const last = (await db.cardio.orderBy('date').reverse().first()) ?? null
       setForm({
         date: params.get('datum') ?? today(),
         activity: last?.activity ?? 'laufen',
         activityText: '',
         durationMin: 30,
-        zone,
-        targetHrMin: r.min,
-        targetHrMax: r.max,
-        intensity: intensityForZone(zone),
+        // Pflichtfelder des Datenmodells; werden beim Speichern aus dem Ø-Puls bestimmt
+        zone: 2,
+        targetHrMin: 0,
+        targetHrMax: 0,
+        intensity: 'moderat',
       })
     })()
   }, [id, profile, params])
@@ -88,14 +86,12 @@ export default function CardioForm() {
   if (!form || !profile) return <div className="h-dvh bg-bg" />
   const max = hrMax(ageOn(profile.birthDate), profile.hrMaxOverride)
   const set = (patch: Partial<Form>) => setForm({ ...form, ...patch })
-  const setZone = (z: ZoneNumber) => {
-    const r = zoneRange(z, max, profile.hrZones)
-    set({ zone: z, targetHrMin: r.min, targetHrMax: r.max, intensity: intensityForZone(z) })
-  }
   const actualZone = form.avgHr ? zoneOf(form.avgHr, max, profile.hrZones) : null
 
   const save = async () => {
-    const clean: Form = { ...form, activityText: form.activityText?.trim() || undefined, createdAt: form.createdAt ?? Date.now() }
+    const zone = (actualZone ?? form.zone) as ZoneNumber
+    const r = zoneRange(zone, max, profile.hrZones)
+    const clean: Form = { ...form, zone, targetHrMin: r.min, targetHrMax: r.max, activityText: form.activityText?.trim() || undefined, createdAt: form.createdAt ?? Date.now() }
     if (id) await db.cardio.update(Number(id), clean)
     else await db.cardio.add(clean)
     toast('Cardio gespeichert', `${clean.activityText || CARDIO_ACTIVITIES.find((a) => a.id === clean.activity)?.label} · ${clean.durationMin} Min`)
@@ -105,28 +101,6 @@ export default function CardioForm() {
   return (
     <div className="min-h-dvh bg-bg pb-36">
       <SubHeader title={isNew ? 'Cardio eintragen' : 'Cardio'} onBack={() => navigate(-1)} />
-
-      {/* Vorschlag Ziel-Intensität */}
-      <div className="mx-4 mt-4 rounded-xl p-[1.5px]" style={{ background: 'linear-gradient(135deg,#8a5ad6,#673ab7)' }}>
-        <div className="rounded-[19px] bg-[#140c22] px-4 py-4">
-          <p className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.05em] text-[#b99af0]">
-            <Icon name="heartMonitor" size={18} /> Ziel-Intensität
-          </p>
-          <p className="mt-1 text-[24px] font-extrabold">
-            {ZONES[form.zone - 1].label}: {form.targetHrMin}–{form.targetHrMax} bpm
-          </p>
-          <p className="text-[14px] text-fg-2">
-            {ZONES[form.zone - 1].name} · HFmax {max} bpm {profile.hrMaxOverride ? '(eigener Wert)' : '(208 − 0,7 × Alter)'}
-          </p>
-          <div className="mt-3 grid grid-cols-5 gap-2">
-            {ZONES.map((z) => (
-              <button key={z.zone} type="button" onClick={() => setZone(z.zone as ZoneNumber)} className={`h-[38px] rounded-md text-[15px] font-semibold ${form.zone === z.zone ? 'bg-[#8a5ad6] text-white' : 'bg-[#241640] text-fg-2'}`}>
-                Z{z.zone}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
 
       <p className="mx-5 mt-6 text-section font-semibold uppercase tracking-[0.06em] text-fg-2">Aktivität</p>
       <div className="mx-4 mt-2 grid grid-cols-4 gap-2">
@@ -173,13 +147,13 @@ export default function CardioForm() {
 
       <p className="mx-5 mt-6 text-section font-semibold uppercase tracking-[0.06em] text-fg-2">Werte von der Garmin (optional)</p>
       <div className="mx-4 mt-2 overflow-hidden rounded-xl bg-surface">
-        <Field label="Ø-Puls" hint={actualZone ? `${ZONES[actualZone - 1].label}${actualZone === form.zone ? ' – im Zielbereich ✓' : ''}` : undefined}>
+        <Field label="Ø-Puls" hint={actualZone ? `${ZONES[actualZone - 1].label} (HFmax ${max} bpm)` : undefined}>
           <NumInput value={form.avgHr} onChange={(v) => set({ avgHr: v ? Math.round(v) : undefined })} unit="bpm" />
         </Field>
         <Field label="Max. Puls">
           <NumInput value={form.maxHr} onChange={(v) => set({ maxHr: v ? Math.round(v) : undefined })} unit="bpm" />
         </Field>
-        <Field label="Zeit in der Zielzone">
+        <Field label="Zeit in Zone" hint="laut Garmin">
           <NumInput value={form.timeInZoneMin} onChange={(v) => set({ timeInZoneMin: v ? Math.round(v) : undefined })} unit="Min" />
         </Field>
         <Field label="Distanz">

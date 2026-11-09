@@ -1,5 +1,7 @@
 # Projekt: Persönliche Fitness-App (Nachbau von „MCI – Personal Training AI")
 
+> **Stand 09.11.2026 – Umbau „Erfassen statt Vorgeben“:** Die App gibt nichts mehr vor. Automatische Anpassung, Planerstellung, Übungstausch-Vorschläge, Kalorien und Schritte wurden auf Wunsch entfernt; Training wird selbst erfasst, dazu wöchentlicher Check-in und Tab „Körper“. Wo dieses Dokument etwas anderes sagt, gilt `DECISIONS.md` → „Umbau: Erfassen statt Vorgeben“.
+
 ## Ziel
 Baue eine Fitness-App für meinen persönlichen Gebrauch, die Aufbau, Navigation, Design, Abläufe und Funktionslogik der App „MCI – Personal Training AI" so genau wie möglich nachbildet. Grundlage sind meine Screenshots und Beschreibungen im Ordner `screenshots/`. Ich nutze die App täglich im Training auf meinem iPhone.
 

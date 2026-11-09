@@ -92,7 +92,7 @@ export function TrendChart({ points, color = '#ed774d', unit = 'kg', height = 20
       <LineChart data={points} margin={{ top: 26, right: 26, bottom: 0, left: 4 }}>
         <CartesianGrid vertical={false} stroke="#1f1f1f" />
         <XAxis dataKey="date" tickFormatter={formatDayMonth} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={26} tick={{ fill: '#9e9e9e', fontSize: 12.5, fontFamily: 'Montserrat' }} dy={8} />
-        <YAxis width={38} domain={[Math.max(0, min - pad), max + pad]} axisLine={false} tickLine={false} tickCount={4} tickFormatter={(v: number) => fmt(v, 0)} tick={{ fill: '#9e9e9e', fontSize: 12, fontFamily: 'Montserrat' }} />
+        <YAxis width={38} domain={[Math.max(0, min - pad), max + pad]} axisLine={false} tickLine={false} tickCount={4} tickFormatter={(v: number) => fmt(v, max - min < 4 ? 1 : 0)} tick={{ fill: '#9e9e9e', fontSize: 12, fontFamily: 'Montserrat' }} />
         <Tooltip content={<TipBox unit={unit} />} cursor={{ stroke: '#3a3a3a', strokeWidth: 1 }} />
         <Line
           type="monotone"

@@ -14,10 +14,12 @@ describe('Backup', () => {
     setNow(new Date(2026, 9, 18, 10, 0))
     await db.delete()
     await db.open()
-    await finishOnboarding(emptyDraft({ ...profileDefaults(s), onboardingDone: false, createdAt: 0 }, 80, 18, true), s)
+    await finishOnboarding(emptyDraft(profileDefaults(s)), s)
     await db.cardio.add({ date: '2026-10-18', activity: 'laufen', durationMin: 30, zone: 2, targetHrMin: 116, targetHrMax: 135, intensity: 'leicht', avgHr: 128 })
     await db.photos.add({ date: '2026-10-18', pose: 'vorne', data: new Uint8Array([1, 2, 3, 4]).buffer, thumbData: new Uint8Array([9]).buffer, mime: 'image/jpeg' })
-    await updateSettings({ stepGoal: 9000 })
+    await db.templates.add({ name: 'Push', exerciseIds: ['bankdruecken-langhantel'], order: 1, createdAt: 1 })
+    await db.checkins.add({ date: '2026-10-18', weight: 81.2, createdAt: 1 })
+    await updateSettings({ restSec: 90 })
   })
 
   it('exportiert alle Tabellen mit Version und Dateiname', async () => {
@@ -46,7 +48,22 @@ describe('Backup', () => {
     const photo = (await db.photos.toArray())[0]
     expect(Array.from(new Uint8Array(photo.data))).toEqual([1, 2, 3, 4])
     expect(photo.mime).toBe('image/jpeg')
-    expect((await getSettings()).stepGoal).toBe(9000)
+    expect((await getSettings()).restSec).toBe(90)
+    expect((await db.templates.toArray()).map((t) => t.name)).toEqual(['Push'])
+    expect((await db.checkins.toArray())[0].weight).toBe(81.2)
+  })
+
+  it('importiert alte Backups ohne Vorlagen und Check-ins', async () => {
+    const b = await createBackup()
+    const tables = { ...b.tables } as Record<string, unknown>
+    delete tables.templates
+    delete tables.checkins
+    const parsed = parseBackup(JSON.stringify({ ...b, tables }))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    await restoreBackup(parsed.data)
+    expect(await db.sessions.count()).toBe(b.counts.sessions)
+    expect(await db.checkins.count()).toBe(0)
   })
 
   it('wandelt Fotos (Blobs) verlustfrei um', async () => {

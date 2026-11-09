@@ -1,6 +1,5 @@
 import { db, kvGet, kvSet } from '../db/db'
 import { setCustomExercises } from '../data/exercises'
-import { loadWeightSteps } from '../db/repo/weights'
 
 /** Start: dauerhaften Speicher anfragen, eigene Übungen laden. */
 export function initApp() {
@@ -16,8 +15,7 @@ export function initApp() {
   db.customExercises
     .toArray()
     .then(setCustomExercises)
-    // Bestehende Pläne an die aktuellen Trainingsregeln anpassen (einmalig je Plan)
-    .then(() => import('../db/repo/migrate').then((m) => m.migratePlanRules()))
+    // Umstellung auf reine Erfassung: bisherigen Plan einmalig als Vorlagen übernehmen (nichts wird gelöscht)
+    .then(() => import('../db/repo/migrate').then((m) => m.migrateToErfassung()))
     .catch(() => {})
-  loadWeightSteps().catch(() => {})
 }

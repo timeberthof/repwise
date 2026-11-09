@@ -27,6 +27,8 @@ export type MuscleId =
   | 'fuesse'
   | 'brustwirbelsaeule'
   | 'schultergelenk'
+  // eigene Übungen ohne Muskelgruppe
+  | 'sonstige'
 
 export type EquipmentId =
   | 'langhantel'
@@ -376,6 +378,27 @@ export interface ProgressPhoto {
   weight?: number
   note?: string
   createdAt?: number
+  /** Foto aus dem wöchentlichen Check-in */
+  checkinId?: number
+}
+
+/** Eigene Trainingsvorlage (z. B. „Push“): nur die Übungen, keine Zielwerte. */
+export interface WorkoutTemplate {
+  id?: number
+  name: string
+  exerciseIds: string[]
+  order: number
+  createdAt: number
+}
+
+/** Wöchentlicher Check-in: Körpergewicht (Pflicht) und Fortschrittsfoto. */
+export interface WeeklyCheckin {
+  id?: number
+  date: ISODate
+  weight: number
+  /** Foto zu diesem Check-in (fehlt = noch offen, „Später“ gewählt) */
+  photoId?: number
+  createdAt: number
 }
 
 export interface ExerciseSettings {

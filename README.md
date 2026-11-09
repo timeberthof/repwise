@@ -1,11 +1,11 @@
 # Repwise
 
-Persönliche Krafttraining-App fürs iPhone: Trainingsplan mit 6-Wochen-Mesozyklen, automatischer
-Anpassung (doppelte Progression, Erholung, Stagnation, Deload), Übungstausch, Statistik, Cardio und
-Fortschrittsfotos. Installierbare Web-App (PWA), komplett offline, alle Daten nur lokal auf dem Gerät.
+Persönliches Trainingstagebuch fürs iPhone: Training aus eigenen Vorlagen selbst erfassen (kg, Wdh., RIR optional),
+Verlauf und Maximalkraft je Übung, wöchentlicher Check-in mit Körpergewicht und Fortschrittsfoto, Cardio.
+Die App gibt nichts vor. Installierbare Web-App (PWA), komplett offline, alle Daten nur lokal auf dem Gerät.
 
 - **Installation aufs iPhone, Backup, Updates:** [ANLEITUNG-IPHONE.md](ANLEITUNG-IPHONE.md)
-- **Entscheidungen und Regeln:** [DECISIONS.md](DECISIONS.md), Progressionsregeln in `src/logic/progression.ts`
+- **Entscheidungen und Regeln:** [DECISIONS.md](DECISIONS.md)
 - **Übungsbibliothek:** `src/data/uebungen.json`
 
 ## Entwicklung

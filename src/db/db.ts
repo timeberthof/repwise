@@ -16,6 +16,8 @@ import type {
   SetEntry,
   StepsEntry,
   StrengthPoint,
+  WeeklyCheckin,
+  WorkoutTemplate,
 } from './types'
 
 export class RepwiseDB extends Dexie {
@@ -35,6 +37,8 @@ export class RepwiseDB extends Dexie {
   customExercises!: EntityTable<Exercise, 'id'>
   exerciseSettings!: EntityTable<ExerciseSettings, 'exerciseId'>
   kv!: EntityTable<KV, 'key'>
+  templates!: EntityTable<WorkoutTemplate, 'id'>
+  checkins!: EntityTable<WeeklyCheckin, 'id'>
 
   constructor(name = 'repwise') {
     super(name)
@@ -60,6 +64,11 @@ export class RepwiseDB extends Dexie {
     this.version(2).stores({
       strength: '++id, exerciseId, date, sessionId, [exerciseId+date]',
     })
+    // v3: eigene Trainingsvorlagen und wöchentliche Check-ins (alle bisherigen Tabellen bleiben unverändert)
+    this.version(3).stores({
+      templates: '++id, order',
+      checkins: '++id, date',
+    })
   }
 }
 
@@ -83,6 +92,8 @@ export const BACKUP_TABLES = [
   'customExercises',
   'exerciseSettings',
   'kv',
+  'templates',
+  'checkins',
 ] as const
 
 export async function kvGet<T>(key: string, fallback: T): Promise<T> {

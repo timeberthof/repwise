@@ -16,6 +16,7 @@ export interface TabDef {
 export const TABS: TabDef[] = [
   { id: 'home', path: '/home', label: 'Home', icon: 'home' },
   { id: 'training', path: '/training', label: 'Training', icon: 'route', activeGradient: GRAD_ACCENT },
+  { id: 'koerper', path: '/koerper', label: 'Körper', icon: 'scale' },
   { id: 'statistik', path: '/statistik', label: 'Statistiken', icon: 'barChart' },
 ]
 

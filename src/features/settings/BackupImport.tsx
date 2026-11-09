@@ -7,6 +7,7 @@ import { useToast } from '../../components/ui/Toast'
 import { parseBackup, restoreBackup, TABLE_LABELS, type BackupFile } from '../../lib/backup'
 import { isStartwerte, type Startwerte } from '../../db/repo/startwerte'
 import { Row } from './SettingsLayout'
+import { takePickedFile } from '../../lib/pickedFile'
 
 /**
  * Datei wählen → Repwise-Backup (Vorschau, Sicherheitsabfrage, Wiederherstellen) oder,
@@ -20,8 +21,7 @@ export function useImportFile({ onStartwerte }: { onStartwerte?: (s: Startwerte)
   const [confirm, setConfirm] = useState(false)
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]
-    e.target.value = ''
+    const f = await takePickedFile(e.target)
     if (!f) return
     const text = await f.text()
     let raw: unknown

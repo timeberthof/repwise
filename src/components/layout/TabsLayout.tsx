@@ -4,10 +4,13 @@ import { TabBar, TABS } from './TabBar'
 import { HomePage } from '../../features/home/HomePage'
 import { TrainingPage } from '../../features/training/TrainingPage'
 import { StatistikPage } from '../../features/statistik/StatistikPage'
+import { KoerperPage } from '../../features/koerper/KoerperPage'
+import { CheckinPrompt } from '../../features/koerper/WeeklyCheckinSheet'
 
 const PAGES: Record<string, () => React.ReactElement> = {
   home: HomePage,
   training: TrainingPage,
+  koerper: KoerperPage,
   statistik: StatistikPage,
 }
 
@@ -85,6 +88,7 @@ export function TabsLayout() {
         })}
       </div>
       <TabBar active={active} onSelect={select} />
+      <CheckinPrompt />
     </>
   )
 }

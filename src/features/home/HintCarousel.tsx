@@ -4,12 +4,6 @@ import type { Hint } from './useHints'
 /** Dunkle Hintergrundgrafik der Hinweiskarte (eigene Zeichnung, ersetzt den Trend-Pfeil des Originals). */
 function Graphic({ kind }: { kind?: Hint['graphic'] }) {
   const stroke = '#272727'
-  if (kind === 'steps')
-    return (
-      <svg viewBox="0 0 120 100" className="absolute -right-2 top-4 h-[110px] w-[130px]" aria-hidden>
-        <path d="M30 70c-6-14 2-30 12-30s14 14 8 30-14 10-20 0Z M76 50c-6-14 2-30 12-30s14 14 8 30-14 10-20 0Z" fill={stroke} />
-      </svg>
-    )
   if (kind === 'backup')
     return (
       <svg viewBox="0 0 120 100" className="absolute -right-2 top-4 h-[110px] w-[130px]" aria-hidden>

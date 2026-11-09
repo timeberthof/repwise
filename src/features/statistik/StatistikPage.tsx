@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { TrainingStats } from './TrainingStats'
-import { BodyStats } from './BodyStats'
 import { CardioStats } from './CardioStats'
 
-type Tab = 'training' | 'koerper' | 'cardio'
+type Tab = 'training' | 'cardio'
 
 const TABS: { id: Tab; label: string; colors: [string, string, string, string]; line: string }[] = [
   { id: 'training', label: 'Training', colors: ['#ea744c', '#cd6643', '#a15134', '#5c2e1d'], line: '#ed774d' },
-  { id: 'koerper', label: 'Körper', colors: ['#6bc95f', '#5bbc51', '#479540', '#224a1f'], line: '#5bbd52' },
   { id: 'cardio', label: 'Cardio', colors: ['#8a5ad6', '#673ab7', '#4d2b8a', '#24143f'], line: '#8a5ad6' },
 ]
 
@@ -87,7 +85,6 @@ export function StatistikPage() {
         }}
       >
         {tab === 'training' && <TrainingStats />}
-        {tab === 'koerper' && <BodyStats />}
         {tab === 'cardio' && <CardioStats />}
       </div>
     </div>

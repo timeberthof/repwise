@@ -37,8 +37,8 @@ test('Produktions-Build: Onboarding mit Datei, offline, Backup-Rundlauf', async 
   await expect(page.getByText('Startwerte geladen').first()).toBeVisible()
   await page.screenshot({ path: shot('P6-startwerte-geladen') })
 
-  // 3) Onboarding durchklicken bis zum Plan
-  for (let i = 0; i < 15; i++) {
+  // 3) Onboarding durchklicken (Willkommen → Körperdaten → So funktioniert Repwise)
+  for (let i = 0; i < 2; i++) {
     await page.getByRole('button', { name: 'Weiter', exact: true }).click()
     await page.waitForTimeout(200)
   }

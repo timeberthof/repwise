@@ -11,9 +11,8 @@ import { useToast } from '../../components/ui/Toast'
 import { db } from '../../db/db'
 import { finishSummary, type FinishSummary } from '../../db/repo/sessions'
 import { computeStreak, loadDoneDates } from '../../db/derived'
-import { planForDate } from '../../db/repo/plan'
 import { getExercise } from '../../data/exercises'
-import { addDays, parseISO, today, WEEKDAYS_SHORT, weekdayIndex } from '../../logic/dates'
+import { addDays, parseISO, WEEKDAYS_SHORT, weekdayIndex } from '../../logic/dates'
 import { dayState } from '../../logic/streak'
 import { fmt } from '../../logic/format'
 import type { MuscleId } from '../../db/types'
@@ -28,11 +27,7 @@ export default function SummaryScreen() {
   const [sum, setSum] = useState<FinishSummary | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const session = useLiveQuery(() => db.sessions.get(sessionId), [sessionId])
-  const info = useLiveQuery(async () => {
-    const profile = (await db.profile.get('me')) ?? null
-    const plan = await planForDate(today())
-    return { streak: await computeStreak(profile, plan), done: await loadDoneDates(), weekdays: profile?.weekdays ?? [] }
-  }, [])
+  const info = useLiveQuery(async () => ({ streak: await computeStreak(), done: await loadDoneDates() }), [])
 
   useEffect(() => {
     finishSummary(sessionId).then(setSum)
@@ -61,7 +56,7 @@ export default function SummaryScreen() {
       `${session.name} · ${parseISO(session.date).toLocaleDateString('de-DE')}`,
       `${fmt(sum.movedKg)} kg bewegt · ${sum.minutes} Min · ${sum.sets} Sätze`,
       ...sum.strength.filter((s) => s.record).map((s) => `🏆 ${getExercise(s.exerciseId)?.name}: ${fmt(s.after)} kg`),
-      `Serie: ${streak}`,
+      `Serie: ${streak} ${streak === 1 ? 'Woche' : 'Wochen'}`,
     ]
     try {
       if (navigator.share) await navigator.share({ title: 'Repwise', text: lines.join('\n') })
@@ -93,22 +88,22 @@ export default function SummaryScreen() {
           <p className="mt-[16px] text-[68px] font-black leading-none" style={{ background: 'linear-gradient(180deg,#c56340 0%,#753924 100%)', WebkitBackgroundClip: 'text', color: 'transparent', animation: 'pop-in 0.7s 0.1s ease-out both' }}>
             {streak}
           </p>
-          <p className="mt-[14px] text-[22px] font-extrabold">{streak <= 1 ? 'Streak gestartet!' : 'Streak verlängert!'}</p>
+          <p className="mt-[14px] text-[22px] font-extrabold">{streak <= 1 ? 'Streak gestartet!' : 'Streak läuft!'}</p>
         </div>
 
         <div className="mx-5 mt-[16px] rounded-xl border border-elevated bg-surface px-3 pb-[14px] pt-[12px]">
           <div className="grid grid-cols-7 gap-1">
             {days.map((d) => {
-              const st = d === day ? 'today' : dayState(d, day, info.done, info.weekdays)
+              const st = d === day ? 'today' : dayState(d, day, info.done)
               const future = d > day
               return (
                 <div key={d} className="flex flex-col items-center gap-[12px]">
                   <span className={`text-[16px] ${future ? 'text-fg-2' : 'text-fg'}`}>{WEEKDAYS_SHORT[weekdayIndex(d)]}</span>
-                  {st === 'rest' ? (
+                  {st === 'rest' || st === 'future' ? (
                     <span className="flex h-[24px] items-center text-[16px]">{parseISO(d).getDate()}</span>
                   ) : (
-                    <span className={`flex h-[24px] w-[24px] items-center justify-center rounded-xs ${st === 'today' ? 'outline outline-[4px] outline-[#3b231a]' : ''}`} style={{ background: st === 'done' || st === 'today' ? '#ed774d' : st === 'missed' ? '#828282' : '#282828', color: st === 'future' ? '#1e1e1e' : '#000' }}>
-                      <Icon name={st === 'missed' ? 'close' : 'check'} size={18} />
+                    <span className={`flex h-[24px] w-[24px] items-center justify-center rounded-xs ${st === 'today' ? 'outline outline-[4px] outline-[#3b231a]' : ''}`} style={{ background: st === 'done' || st === 'today' ? '#ed774d' : '#282828', color: '#000' }}>
+                      <Icon name="check" size={18} />
                     </span>
                   )}
                 </div>
@@ -122,7 +117,7 @@ export default function SummaryScreen() {
               </>
             ) : (
               <>
-                Deine <b className="text-orange">Streak</b> steht bei {streak} Trainings!
+                Du trainierst seit <b className="text-orange">{streak} Wochen</b> in Folge!
               </>
             )}
           </p>

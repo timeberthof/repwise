@@ -17,17 +17,16 @@ export function SettingsPage() {
 
       <SectionLabel className="mt-[34px]">Personalisierung</SectionLabel>
       <ListGroup className="mx-4 mt-[13px]">
-        <ListRow icon="settings" color="#ff6e40" title="Trainingsplan" onClick={go('trainingsplan')} />
-        <ListRow icon="calendar" color="#f3af3d" title="Zyklus" onClick={() => navigate('/zyklus')} />
-        <ListRow icon="heartMonitor" color="#673ab7" title="Cardio-Trainingsplan" onClick={go('cardio')} />
-        <ListRow icon="trophy" color="#ffaa00" title="Ziele & Kalorien" onClick={go('ziele')} />
-        <ListRow icon="walk" color="#7a5be0" title="Schritte" onClick={go('schritte')} />
+        <ListRow icon="list" color="#ff6e40" title="Meine Übungen" onClick={() => navigate('/uebungen')} />
+        <ListRow icon="bookmark" color="#f3af3d" title="Vorlagen" onClick={() => navigate('/vorlagen')} />
+        <ListRow icon="timer" color="#20a0ff" title="Training & Pausentimer" onClick={go('training')} />
+        <ListRow icon="heartMonitor" color="#673ab7" title="Cardio" onClick={go('cardio')} />
         <ListRow icon="notifications" color="#20c040" title="Hinweise" onClick={go('hinweise')} />
       </ListGroup>
 
       <SectionLabel className="mt-[34px]">Aktionen</SectionLabel>
       <ListGroup className="mx-4 mt-[13px]">
-        <ListRow icon="camera" color="#ffaa00" title="Fortschrittsfotos" onClick={go('fotos')} />
+        <ListRow icon="camera" color="#ffaa00" title="Körper & Fotos" onClick={() => navigate('/koerper')} />
         <ListRow icon="history" color="#ed774d" title="Trainingsverlauf" onClick={() => navigate('/verlauf')} />
         <ListRow icon="database" color="#2020ff" title="Daten & Backup" onClick={go('daten')} />
       </ListGroup>

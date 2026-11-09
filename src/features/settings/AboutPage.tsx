@@ -26,7 +26,7 @@ export function AboutPage() {
           <p className="text-[14px] text-fg-2">
             Version {__APP_VERSION__} · {__BUILD_DATE__}
           </p>
-          <p className="text-[13px] text-fg-2">Persönliches Krafttraining mit automatischer Anpassung</p>
+          <p className="text-[13px] text-fg-2">Persönliches Trainingstagebuch – Du trägst ein, Repwise zeigt den Fortschritt</p>
         </div>
       </div>
 

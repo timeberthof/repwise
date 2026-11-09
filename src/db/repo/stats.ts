@@ -1,5 +1,5 @@
 import { db, kvGet } from '../db'
-import type { AdjustmentNote, ISODate, StrengthPoint } from '../types'
+import type { ISODate, StrengthPoint } from '../types'
 import type { WorkingWeight } from './startwerte'
 import { sessionE1rm } from '../../logic/e1rm'
 import { getExercise } from '../../data/exercises'
@@ -69,7 +69,6 @@ export interface SessionMetric {
   /** Summe Gewicht × Wiederholungen */
   volume: number | null
   sets: { weight: number | null; reps: number; rir: number | null }[]
-  notes: AdjustmentNote[]
 }
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
@@ -100,7 +99,6 @@ export async function exerciseDetail(exerciseId: string): Promise<SessionMetric[
       maxRepsWeight: sets.find((x) => x.reps === maxReps)?.weight ?? null,
       volume: Math.round(sets.reduce((sum, x) => sum + (x.weight ?? 0) * x.reps, 0)),
       sets: sets.map((x) => ({ weight: x.weight, reps: x.reps, rir: x.rir })),
-      notes: se.adjustments,
     })
     appDates.add(s.date)
   }
@@ -119,26 +117,9 @@ export async function exerciseDetail(exerciseId: string): Promise<SessionMetric[
       maxRepsWeight: w?.reps ? w.weight : null,
       volume: null,
       sets: [],
-      notes: [],
     })
   }
   return out.sort((a, b) => a.date.localeCompare(b.date))
-}
-
-export async function exerciseFullHistory(exerciseId: string) {
-  const pts = dedupe(await db.strength.where('exerciseId').equals(exerciseId).toArray())
-  const sessionEx = await db.sessionExercises.where('exerciseId').equals(exerciseId).toArray()
-  const sessions: { date: ISODate; sessionId: number; sets: { weight: number | null; reps: number; rir: number | null }[]; notes: string[] }[] = []
-  for (const se of sessionEx) {
-    const s = await db.sessions.get(se.sessionId)
-    if (!s || s.status !== 'fertig') continue
-    const sets = (await db.sets.where('sessionExerciseId').equals(se.id!).sortBy('index')).filter((x) => x.done)
-    if (!sets.length) continue
-    sessions.push({ date: s.date, sessionId: s.id!, sets: sets.map((x) => ({ weight: x.weight, reps: x.reps, rir: x.rir })), notes: se.adjustments.map((a) => a.reason) })
-  }
-  sessions.sort((a, b) => b.date.localeCompare(a.date))
-  const adjustments = (await db.adjustments.where('exerciseId').equals(exerciseId).toArray()).sort((a, b) => b.date.localeCompare(a.date))
-  return { points: pts, sessions, adjustments }
 }
 
 /** Trainings je Woche (letzte n Wochen) und Ø Dauer. */
@@ -155,13 +136,6 @@ export async function trainingSummary(weeks = 8) {
   const sets = await db.sets.where('date').between(addDays(t, -27), t, true, true).filter((x) => x.done).toArray()
   const volume = Math.round(sets.reduce((sum, x) => sum + (x.weight ?? 0) * x.reps, 0))
   return { perWeek, avgMin, total4w: done.filter((s) => diffDays(s.date, t) < 28).length, sets4w: sets.length, volume4w: volume }
-}
-
-export async function stepsLastDays(days = 7) {
-  const t = today()
-  const list = Array.from({ length: days }, (_, i) => addDays(t, i - days))
-  const entries = await db.steps.where('date').between(list[0], list[list.length - 1], true, true).toArray()
-  return list.map((d) => ({ date: d, value: entries.find((e) => e.date === d)?.steps ?? 0 }))
 }
 
 export async function cardioWeeks(weeks = 6) {

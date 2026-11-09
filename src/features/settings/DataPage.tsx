@@ -67,7 +67,7 @@ export function DataPage() {
         </Group>
       </Section>
 
-      <Section title="Backup" hint={`Sichert Profil, Trainings, Zyklus, Anpassungsprotokoll, Cardio, Schritte, Einstellungen und Fortschrittsfotos in einer Datei. ${sinceDays === null ? 'Noch kein Backup erstellt.' : sinceDays === 0 ? 'Letztes Backup: heute.' : `Letztes Backup: vor ${sinceDays} ${sinceDays === 1 ? 'Tag' : 'Tagen'}.`}`}>
+      <Section title="Backup" hint={`Sichert alle Daten in einer Datei: Profil, Trainings mit allen Sätzen, Übungen, Vorlagen, Check-ins, Körperwerte, Cardio, Einstellungen und Fortschrittsfotos (auch ältere Daten wie Zyklus und Schritte). ${sinceDays === null ? 'Noch kein Backup erstellt.' : sinceDays === 0 ? 'Letztes Backup: heute.' : `Letztes Backup: vor ${sinceDays} ${sinceDays === 1 ? 'Tag' : 'Tagen'}.`}`}>
         {!file ? (
           <Button
             icon="download"

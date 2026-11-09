@@ -1,28 +1,18 @@
-import { updateSettings, useSettings, type AppSettings } from '../../db/settings'
+import { updateSettings, useSettings } from '../../db/settings'
 import { Toggle } from '../../components/ui/Toggle'
 import { Group, Row, Section, SettingsLayout } from './SettingsLayout'
 
-const HINTS: { id: keyof AppSettings['hints']; label: string; sub: string }[] = [
-  { id: 'zyklus', label: 'Zyklus beenden', sub: 'In der letzten Woche des Mesozyklus: nächsten Zyklus planen' },
-  { id: 'schritte', label: 'Schritte von gestern', sub: 'Erinnerung, solange die Schritte von gestern fehlen' },
-  { id: 'gewicht', label: 'Weigh-In', sub: 'Erinnerung, das heutige Gewicht einzutragen' },
-  { id: 'backup', label: 'Backup', sub: 'Erinnerung, wenn das letzte Backup zu lange her ist' },
-  { id: 'training', label: 'Zyklus-Info', sub: 'Wann der nächste Zyklus beginnt' },
-]
-
-/** Hinweise: nur In-App-Hinweise (Karussell auf dem Dashboard), einzeln schaltbar. */
+/** Hinweise: nur In-App-Hinweise (Karussell auf dem Dashboard). Der wöchentliche Check-in erscheint immer. */
 export function HintsSettingsPage() {
   const s = useSettings()
   if (!s) return <SettingsLayout title="Hinweise">{null}</SettingsLayout>
   return (
     <SettingsLayout title="Hinweise">
-      <Section title="Hinweise im Dashboard" hint="Repwise verschickt keine Push-Benachrichtigungen. Hinweise erscheinen nur in der App im Bereich „Willkommen zurück“.">
+      <Section title="Hinweise im Dashboard" hint="Repwise verschickt keine Push-Benachrichtigungen. Hinweise erscheinen nur in der App im Bereich „Willkommen zurück“. Der wöchentliche Check-in erscheint beim Öffnen der App.">
         <Group>
-          {HINTS.map((h, i) => (
-            <Row key={h.id} label={h.label} sub={h.sub} last={i === HINTS.length - 1}>
-              <Toggle checked={s.hints[h.id]} onChange={(on) => updateSettings({ hints: { ...s.hints, [h.id]: on } })} label={h.label} />
-            </Row>
-          ))}
+          <Row label="Backup" sub="Erinnerung, wenn das letzte Backup zu lange her ist" last>
+            <Toggle checked={s.hints.backup} onChange={(on) => updateSettings({ hints: { ...s.hints, backup: on } })} label="Backup" />
+          </Row>
         </Group>
       </Section>
       <Section title="Backup-Erinnerung">

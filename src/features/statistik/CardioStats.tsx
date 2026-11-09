@@ -72,14 +72,14 @@ export function CardioStats() {
       {max && profile && (
         <StatCard
           title="Deine Pulszonen"
-          sub={`HFmax ${max} bpm ${profile.hrMaxOverride ? '(eigener Wert)' : '(208 − 0,7 × Alter)'}${profile.hrZones ? ' · eigene Grenzen' : ''} · Ziel: ${ZONES[profile.cardioZone - 1].label}`}
+          sub={`HFmax ${max} bpm ${profile.hrMaxOverride ? '(eigener Wert)' : '(208 − 0,7 × Alter)'}${profile.hrZones ? ' · eigene Grenzen' : ''}`}
           onClick={() => navigate('/einstellungen/cardio')}
         >
           <div className="flex flex-col gap-1 px-4 pb-4 pt-2">
             {ZONES.map((z) => {
               const r = zoneRange(z.zone as ZoneNumber, max, profile.hrZones)
               return (
-                <div key={z.zone} className={`flex justify-between text-[15px] ${z.zone === profile.cardioZone ? 'font-semibold text-fg' : 'text-fg-2'}`}>
+                <div key={z.zone} className="flex justify-between text-[15px] text-fg-2">
                   <span>
                     {z.label} · {z.name}
                   </span>

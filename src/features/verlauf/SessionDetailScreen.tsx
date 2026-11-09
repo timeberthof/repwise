@@ -7,20 +7,17 @@ import { Chip } from '../../components/ui/Chip'
 import { ExerciseGlyph } from '../../components/ui/ExerciseGlyph'
 import { BottomSheet, SheetTitle } from '../../components/ui/BottomSheet'
 import { Button } from '../../components/ui/Button'
-import { Stepper } from '../../components/ui/Stepper'
 import { ConfirmSheet } from '../../components/ui/ConfirmSheet'
 import { ActionSheet } from '../../components/ui/ActionSheet'
 import { useToast } from '../../components/ui/Toast'
-import { addSetAfter, ADJUSTMENT_KINDS, deleteSessionCompletely, deleteSet, editSet, sessionDetail } from '../../db/repo/journal'
+import { addSetTo, deleteSessionCompletely, deleteSet, editSet, sessionDetail } from '../../db/repo/journal'
 import { exerciseName, getExercise } from '../../data/exercises'
-import { stepFor } from '../../db/repo/weights'
 import { muscleLabel } from '../../data/muskeln'
 import { formatLong } from '../../logic/dates'
 import { fmt } from '../../logic/format'
 import { sessionE1rm } from '../../logic/e1rm'
-import { WEEK_TYPE_INFO } from '../../logic/progression'
-import { WEEK_TYPE_STYLE } from '../training/weekTypeStyle'
 import type { SetEntry } from '../../db/types'
+import { setText } from '../workout/ExerciseBlock'
 
 /** Detailansicht einer abgeschlossenen Einheit – bearbeiten und löschen. */
 export default function SessionDetailScreen() {
@@ -30,7 +27,7 @@ export default function SessionDetailScreen() {
   const toast = useToast()
   const data = useLiveQuery(() => sessionDetail(sessionId), [sessionId])
   const [editing, setEditing] = useState(false)
-  const [setSheet, setSetSheet] = useState<SetEntry | null>(null)
+  const [setSheet, setSetSheet] = useState<{ set: SetEntry | null; seId: number; exerciseId: string } | null>(null)
   const [menu, setMenu] = useState(false)
   const [confirm, setConfirm] = useState<0 | 1 | 2>(0)
 
@@ -43,11 +40,10 @@ export default function SessionDetailScreen() {
       </div>
     )
   }
-  const { session, exercises, adjustments, imported } = data
+  const { session, exercises, imported } = data
   const done = exercises.flatMap((e) => e.setList.filter((s) => s.done))
   const volume = Math.round(done.reduce((sum, x) => sum + (x.weight ?? 0) * x.reps, 0))
   const minutes = session.startedAt && session.endedAt ? Math.round((session.endedAt - session.startedAt) / 60000) : null
-  const style = WEEK_TYPE_STYLE[session.weekType]
 
   return (
     <div className="min-h-dvh bg-bg pb-24">
@@ -62,11 +58,6 @@ export default function SessionDetailScreen() {
       />
       <p className="mx-5 mt-4 text-[15px] text-fg-2">{formatLong(session.date)}</p>
       <div className="no-scrollbar flex gap-[10px] overflow-x-auto px-5 pt-3">
-        {session.kind === 'kraft' && !session.imported && (
-          <Chip icon={style.icon} tone={session.weekType === 'normal' ? undefined : style.badge}>
-            {WEEK_TYPE_INFO[session.weekType].label}
-          </Chip>
-        )}
         {!!minutes && <Chip icon="schedule">{minutes} Minuten</Chip>}
         {editing && (
           <Chip icon="edit" tone="#f3af3d" onClick={() => setEditing(false)}>
@@ -103,7 +94,7 @@ export default function SessionDetailScreen() {
           </div>
           {session.checkin && !session.checkin.skipped && (
             <p className="mx-5 mt-3 text-[13.5px] text-fg-2">
-              Check-in: Energie {session.checkin.energy ?? '–'}/10 · Schlaf {session.checkin.sleep ?? '–'}/10
+              Tagesform: Energie {session.checkin.energy ?? '–'}/10 · Schlaf {session.checkin.sleep ?? '–'}/10
               {Object.entries(session.checkin.soreness ?? {}).some(([, v]) => (v ?? 0) > 0)
                 ? ` · Muskelkater ${Object.entries(session.checkin.soreness ?? {})
                     .filter(([, v]) => (v ?? 0) > 0)
@@ -124,14 +115,14 @@ export default function SessionDetailScreen() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[17px] font-semibold">{ex?.name ?? se.exerciseId}</p>
                       <p className="text-[13px] text-fg-2">
-                        {se.repMin}–{se.repMax} Wdh{e1 ? ` · Ø 1RM ${fmt(e1, 1)} kg` : ''}
+                        {se.setList.filter((x) => x.done).length} Sätze{e1 ? ` · Ø 1RM ${fmt(e1, 1)} kg` : ''}
                         {se.swappedFrom ? ` · statt ${exerciseName(se.swappedFrom)}` : ''}
                       </p>
                     </div>
                   </div>
                   <div className="mt-2 flex flex-col">
                     {se.setList.map((s) => (
-                      <button key={s.id} type="button" disabled={!editing} onClick={() => setSetSheet(s)} className={`grid grid-cols-[30px_1fr_1fr_1fr_20px] items-center rounded-md py-[5px] text-left text-[15px] ${editing ? 'active:bg-white/5' : ''} ${s.done ? '' : 'text-fg-3 line-through'}`}>
+                      <button key={s.id} type="button" disabled={!editing} onClick={() => setSetSheet({ set: s, seId: se.id!, exerciseId: se.exerciseId })} className={`grid grid-cols-[30px_1fr_1fr_1fr_20px] items-center rounded-md py-[5px] text-left text-[15px] ${editing ? 'active:bg-white/5' : ''} ${s.done ? '' : 'text-fg-3 line-through'}`}>
                         <span className="text-fg-2">{s.index + 1}</span>
                         <span>{s.reps} Wdh</span>
                         <span>{s.weight ? `${fmt(s.weight)} kg` : '–'}</span>
@@ -140,7 +131,7 @@ export default function SessionDetailScreen() {
                       </button>
                     ))}
                     {editing && (
-                      <button type="button" onClick={() => addSetAfter(se.id!)} className="mt-1 flex items-center gap-2 text-[14px] font-semibold text-amber">
+                      <button type="button" onClick={() => setSetSheet({ set: null, seId: se.id!, exerciseId: se.exerciseId })} className="mt-1 flex items-center gap-2 text-[14px] font-semibold text-amber">
                         <Icon name="add" size={18} /> Satz hinzufügen
                       </button>
                     )}
@@ -149,24 +140,6 @@ export default function SessionDetailScreen() {
                 </div>
               )
             })}
-          </div>
-        </>
-      )}
-
-      {adjustments.length > 0 && (
-        <>
-          <p className="mx-5 mt-6 text-section font-semibold uppercase tracking-[0.06em] text-fg-2">Anpassungen in dieser Einheit</p>
-          <div className="mx-5 mt-2 flex flex-col gap-2">
-            {adjustments.map((a) => (
-              <div key={a.id} className="rounded-lg bg-surface px-4 py-3">
-                <p className="text-[12px] font-semibold uppercase tracking-[0.04em] text-amber">{ADJUSTMENT_KINDS.find((k) => k.id === a.kind)?.label ?? a.kind}</p>
-                <p className="mt-1 text-[15px] font-semibold">
-                  {a.exerciseId && a.field !== 'uebung' ? `${exerciseName(a.exerciseId)}: ` : ''}
-                  {a.title}
-                </p>
-                <p className="text-[14px] text-fg-2">{a.reason}</p>
-              </div>
-            ))}
           </div>
         </>
       )}
@@ -184,7 +157,7 @@ export default function SessionDetailScreen() {
         open={confirm === 1}
         onClose={() => setConfirm(0)}
         title="Training löschen?"
-        text={`„${session.name}“ vom ${formatLong(session.date)} wird mit allen Sätzen, Maximalkraft-Werten und Protokolleinträgen gelöscht. Das lässt sich nicht rückgängig machen.`}
+        text={`„${session.name}“ vom ${formatLong(session.date)} wird mit allen Sätzen und Maximalkraft-Werten gelöscht. Das lässt sich nicht rückgängig machen.`}
         confirmLabel="Löschen"
         onConfirm={async () => {
           await deleteSessionCompletely(sessionId)
@@ -192,34 +165,50 @@ export default function SessionDetailScreen() {
           navigate(-1)
         }}
       />
-      <SetEditSheet set={setSheet} onClose={() => setSetSheet(null)} />
+      <SetEditSheet target={setSheet} onClose={() => setSetSheet(null)} />
     </div>
   )
 }
 
-function SetEditSheet({ set, onClose }: { set: SetEntry | null; onClose: () => void }) {
-  const [vals, setVals] = useState({ reps: 8, weight: 0 as number | null, rir: 2 as number | null })
+const INPUT = 'h-[48px] w-full rounded-md bg-surface-2 px-2 text-center text-[18px] tabular-nums outline-none placeholder:text-fg-3'
+const num = (v: string): number | null => {
+  const t = v.trim().replace(',', '.')
+  if (!t) return null
+  const n = Number(t)
+  return Number.isFinite(n) ? n : null
+}
+const str = (n: number | null | undefined) => (n === null || n === undefined ? '' : String(n).replace('.', ','))
+
+/** Satz nachträglich ändern oder hinzufügen (leere Felder beim Hinzufügen). */
+function SetEditSheet({ target, onClose }: { target: { set: SetEntry | null; seId: number; exerciseId: string } | null; onClose: () => void }) {
+  const [vals, setVals] = useState({ w: '', r: '', i: '' })
   const [confirm, setConfirm] = useState(false)
   useEffect(() => {
-    if (set) setVals({ reps: set.reps, weight: set.weight, rir: set.rir })
-  }, [set])
-  const ex = set ? getExercise(set.exerciseId) : undefined
-  const step = (ex && stepFor(ex)) || 2.5
+    if (target) setVals(target.set ? { w: str(target.set.weight), r: str(target.set.reps), i: str(target.set.rir) } : { w: '', r: '', i: '' })
+  }, [target])
+  const reps = num(vals.r)
+  const values = { weight: num(vals.w), reps: reps ?? 0, rir: num(vals.i) }
+  const set = target?.set ?? null
   return (
     <>
       <BottomSheet
-        open={!!set}
+        open={!!target}
         onClose={onClose}
-        label="Satz bearbeiten"
+        label={set ? 'Satz bearbeiten' : 'Satz hinzufügen'}
         footer={
           <div className="flex gap-3">
-            <Button variant="secondary" icon="delete" onClick={() => setConfirm(true)}>
-              Löschen
-            </Button>
+            {set && (
+              <Button variant="secondary" icon="delete" onClick={() => setConfirm(true)}>
+                Löschen
+              </Button>
+            )}
             <Button
               icon="check"
+              disabled={!reps || reps <= 0}
               onClick={async () => {
-                if (set) await editSet(set.id!, vals)
+                if (!target) return
+                if (set) await editSet(set.id!, values)
+                else await addSetTo(target.seId, values)
                 onClose()
               }}
             >
@@ -228,20 +217,20 @@ function SetEditSheet({ set, onClose }: { set: SetEntry | null; onClose: () => v
           </div>
         }
       >
-        <SheetTitle sub={set ? `${exerciseName(set.exerciseId)} · Satz ${set.index + 1}` : ''}>Satz bearbeiten</SheetTitle>
-        <div className="mx-6 mb-4 grid grid-cols-3 rounded-lg bg-elevated px-1 py-3 text-center">
-          <div>
-            <p className="text-[15px] text-fg-2">WDH</p>
-            <Stepper compact value={vals.reps} onChange={(v) => setVals({ ...vals, reps: v })} min={0} max={100} />
-          </div>
-          <div>
-            <p className="text-[15px] text-fg-2">KG</p>
-            <Stepper compact value={vals.weight ?? 0} onChange={(v) => setVals({ ...vals, weight: v || null })} step={step} min={0} max={500} />
-          </div>
-          <div>
-            <p className="text-[15px] text-fg-2">RIR</p>
-            <Stepper compact value={vals.rir ?? 0} onChange={(v) => setVals({ ...vals, rir: v })} min={0} max={6} />
-          </div>
+        <SheetTitle sub={target ? `${exerciseName(target.exerciseId)}${set ? ` · Satz ${set.index + 1} (${setText(set)})` : ''}` : ''}>{set ? 'Satz bearbeiten' : 'Satz hinzufügen'}</SheetTitle>
+        <div className="mx-6 mb-4 grid grid-cols-3 gap-2 text-center">
+          <label>
+            <span className="text-[14px] text-fg-2">KG</span>
+            <input inputMode="decimal" value={vals.w} onChange={(e) => setVals({ ...vals, w: e.target.value })} placeholder="kg" aria-label="Gewicht" className={INPUT} />
+          </label>
+          <label>
+            <span className="text-[14px] text-fg-2">WDH</span>
+            <input inputMode="numeric" value={vals.r} onChange={(e) => setVals({ ...vals, r: e.target.value })} placeholder="Wdh" aria-label="Wiederholungen" className={INPUT} />
+          </label>
+          <label>
+            <span className="text-[14px] text-fg-2">RIR (optional)</span>
+            <input inputMode="numeric" value={vals.i} onChange={(e) => setVals({ ...vals, i: e.target.value })} placeholder="–" aria-label="RIR" className={INPUT} />
+          </label>
         </div>
       </BottomSheet>
       <ConfirmSheet

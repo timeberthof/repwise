@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { db } from '../../db/db'
 import { useProfile } from '../../db/hooks'
 import { ageOn } from '../../logic/dates'
-import { defaultZoneBounds, hrMax, ZONES, type ZoneNumber } from '../../logic/heartRate'
+import { defaultZoneBounds, hrMax, ZONES } from '../../logic/heartRate'
 import { Toggle } from '../../components/ui/Toggle'
 import { StepperField } from '../../components/ui/Stepper'
 import { Button } from '../../components/ui/Button'
 import { Group, Row, Section, SettingsLayout } from './SettingsLayout'
 
-/** Cardio: maximale Herzfrequenz, Zonengrenzen, Standard-Zielzone. */
+/** Cardio: maximale Herzfrequenz und Zonengrenzen (für die Zuordnung des Ø-Pulses). */
 export function CardioSettingsPage() {
   const profile = useProfile()
   const [bounds, setBounds] = useState<number[] | null>(null)
@@ -44,16 +44,6 @@ export function CardioSettingsPage() {
             <StepperField value={profile.hrMaxOverride} onChange={(v) => db.profile.update('me', { hrMaxOverride: v, hrZones: undefined }).then(() => setBounds(null))} min={140} max={230} digits={0} suffix="bpm" />
           </div>
         )}
-      </Section>
-
-      <Section title="Standard-Zielzone" hint="Diese Zone schlägt Repwise beim Cardio-Eintrag vor (änderbar je Einheit).">
-        <div className="grid grid-cols-5 gap-2">
-          {ZONES.map((z) => (
-            <button key={z.zone} type="button" onClick={() => db.profile.update('me', { cardioZone: z.zone as ZoneNumber })} className={`h-[44px] rounded-md text-[16px] font-semibold ${profile.cardioZone === z.zone ? 'bg-[#8a5ad6] text-white' : 'bg-surface-3 text-fg-2'}`}>
-              Z{z.zone}
-            </button>
-          ))}
-        </div>
       </Section>
 
       <Section title="Zonengrenzen" hint={custom ? 'Eigene Grenzen aktiv.' : 'Standard: Prozent der maximalen Herzfrequenz (50/60/70/80/90 %). Tippe auf − / + für eigene Grenzen.'}>

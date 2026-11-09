@@ -80,3 +80,12 @@ Antworten am 18.10.2026 erhalten → `DECISIONS.md`.
 - **Progression:** +2,5 kg (Oberkörper) bzw. +5 kg (Unterkörper) bei Mehrgelenksübungen, danach zurück ans untere Ende; Deload/Peak keine Basis.
 - **Migration** bestehender Pläne beim Start und nach Backup-Import; alte Backups bleiben importierbar.
 - Tests: 109 Unit-Tests grün (neu u. a. `planRules.test.ts` mit allen Splits × Tagen × Equipment, `migrate.test.ts`). Browser-Test in iPhone-Größe: Training, Workout-Sheet (RIR, Anker, Varianten, Fixieren, Aufwärmen), 7-Übungen-Grenze, Statistik-Karte, Einstellungen mit Vorschlag, Vorschau mit Varianten.
+
+## Umbau: Erfassen statt Vorgeben (09.11.2026) – lokal, noch nicht veröffentlicht
+
+- **Sicherung:** Git-Tag `vor-umbau-erfassung`; Datenbank v3 fügt nur Tabellen hinzu, nichts wird gelöscht; einmalige Migration Plan → Vorlagen (Details in DECISIONS.md).
+- **Entfernt:** Kalorienrechner, Schritte, Zyklus/Plan-Erstellung, automatische Anpassung, Vorschläge (auch Cardio-Zielzone), Anpassungsprotokoll-Ansicht.
+- **Neu:** Training aus eigenen Vorlagen oder leer, Sätze selbst eintragen (kg, Wdh., RIR optional), „Letztes Mal“ als Info, Meine Übungen (anlegen, bearbeiten, löschen), Vorlagen-Editor, Pausentimer-Einstellung.
+- **Neu:** wöchentlicher Check-in (Gewicht Pflicht, Foto oder „Später“), Tab „Körper“ mit Gewichtsverlauf, Fotos und Vorher/Nachher.
+- **Tests:** 42 Unit-Tests grün (neu `erfassung.test.ts`: Sätze, Beenden, „Letztes Mal“, Übungen, Vorlagen, Check-in, Migration mit Datenerhalt); Playwright WebKit 393 × 852: 5 Screen-Tests und Produktions-Test (offline, Backup-Rundlauf) grün.
+- Nicht automatisch prüfbar: Kamera auf dem echten iPhone, Update einer installierten App mit echten Altdaten (vorher Backup machen).

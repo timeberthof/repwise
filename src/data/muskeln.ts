@@ -1,7 +1,7 @@
 import type { MuscleId, PainRegion, Joint } from '../db/types'
 
 /** Gruppen wie in Statistik › Training des Originals. */
-export type StatGroup = 'ruecken' | 'brust' | 'schultern' | 'arme' | 'beine' | 'core' | 'mobility'
+export type StatGroup = 'ruecken' | 'brust' | 'schultern' | 'arme' | 'beine' | 'core' | 'sonstige' | 'mobility'
 
 /** Muskelgruppen aus CLAUDE.md (für Volumen, Bibliothek, Schwerpunkte). */
 export type MainGroup =
@@ -16,6 +16,7 @@ export type MainGroup =
   | 'Beinbeuger'
   | 'Gesäß'
   | 'Waden'
+  | 'Sonstige'
   | 'Mobility'
 
 export interface MuscleMeta {
@@ -52,6 +53,7 @@ export const MUSCLES: Record<MuscleId, MuscleMeta> = {
   fuesse: { id: 'fuesse', label: 'Füße', stat: 'mobility', main: 'Mobility', side: 'mobility', half: 'mobility' },
   brustwirbelsaeule: { id: 'brustwirbelsaeule', label: 'Brustwirbelsäule', stat: 'mobility', main: 'Mobility', side: 'mobility', half: 'mobility' },
   schultergelenk: { id: 'schultergelenk', label: 'Schultergelenk', stat: 'mobility', main: 'Mobility', side: 'mobility', half: 'mobility' },
+  sonstige: { id: 'sonstige', label: 'Ohne Muskelgruppe', stat: 'sonstige', main: 'Sonstige', side: 'core', half: 'core' },
 }
 
 export const STAT_GROUPS: { id: StatGroup; label: string }[] = [
@@ -61,6 +63,7 @@ export const STAT_GROUPS: { id: StatGroup; label: string }[] = [
   { id: 'arme', label: 'Arme' },
   { id: 'beine', label: 'Beine' },
   { id: 'core', label: 'Core' },
+  { id: 'sonstige', label: 'Sonstige' },
 ]
 
 export const MAIN_GROUPS: MainGroup[] = [
@@ -78,6 +81,28 @@ export const MAIN_GROUPS: MainGroup[] = [
 ]
 
 /** Muskeln, die als Schwerpunkt (Fokus) wählbar sind. */
+/** Muskelgruppen zur Auswahl beim Anlegen einer eigenen Übung. */
+export const MUSCLE_CHOICES: MuscleId[] = [
+  'brust',
+  'ruecken',
+  'unterer_ruecken',
+  'nacken',
+  'vordere_schulter',
+  'mittlere_schulter',
+  'hintere_schulter',
+  'bizeps',
+  'trizeps',
+  'unterarme',
+  'bauch',
+  'quadrizeps',
+  'beinbeuger',
+  'gesaess',
+  'adduktoren',
+  'abduktoren',
+  'waden',
+  'sonstige',
+]
+
 export const FOCUS_OPTIONS: MuscleId[] = [
   'brust',
   'ruecken',

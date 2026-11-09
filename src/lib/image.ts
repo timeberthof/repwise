@@ -6,9 +6,13 @@ export async function compressImage(file: Blob, maxSize: number, quality: number
   const url = URL.createObjectURL(file)
   try {
     const img = new Image()
-    img.decoding = 'async'
-    img.src = url
-    await img.decode()
+    // Auf „load“ warten: img.decode() allein schlägt in WebKit/Safari gelegentlich mit „EncodingError“ fehl
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve()
+      img.onerror = () => reject(new Error('Bild konnte nicht geladen werden'))
+      img.src = url
+    })
+    await img.decode().catch(() => undefined)
     const scale = Math.min(1, maxSize / Math.max(img.naturalWidth, img.naturalHeight))
     const width = Math.round(img.naturalWidth * scale)
     const height = Math.round(img.naturalHeight * scale)

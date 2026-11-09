@@ -1,42 +1,30 @@
 import type { ISODate } from '../db/types'
 import { addDays, weekdayIndex } from './dates'
 
-export interface StreakInput {
-  today: ISODate
-  /** Tage mit abgeschlossenem Training */
-  doneDates: Set<ISODate>
-  /** Geplante Trainingstage (0 = Mo … 6 = So) */
-  plannedWeekdays: number[]
-  /** Pausierte Tage zählen nicht als verpasst */
-  pausedDates?: Set<ISODate>
-}
+/** Montag der Woche eines Datums. */
+export const weekStart = (d: ISODate) => addDays(d, -weekdayIndex(d))
 
 /**
- * Serie wie im Original: zählt erledigte Trainings rückwärts bis zum ersten verpassten
- * geplanten Trainingstag. Ruhetage unterbrechen nicht, der heutige Tag auch nicht.
+ * Serie ohne Plan: Wochen in Folge mit mindestens einem Training. Die laufende Woche zählt mit, sobald trainiert
+ * wurde; ist sie noch leer, bricht die Serie dadurch nicht ab.
  */
-export function trainingStreak({ today, doneDates, plannedWeekdays, pausedDates }: StreakInput): number {
-  let streak = 0
-  for (let i = 0; i < 400; i++) {
-    const d = addDays(today, -i)
-    if (doneDates.has(d)) {
-      streak++
-      continue
-    }
-    if (i === 0) continue
-    if (pausedDates?.has(d)) continue
-    if (plannedWeekdays.includes(weekdayIndex(d))) break
+export function weeklyStreak(today: ISODate, doneDates: Set<ISODate>): number {
+  const weeks = new Set([...doneDates].map(weekStart))
+  let w = weekStart(today)
+  if (!weeks.has(w)) w = addDays(w, -7)
+  let n = 0
+  while (weeks.has(w) && n < 520) {
+    n++
+    w = addDays(w, -7)
   }
-  return streak
+  return n
 }
 
-export type DayState = 'done' | 'missed' | 'today' | 'future' | 'rest'
+export type DayState = 'done' | 'today' | 'future' | 'rest'
 
 /** Zustand eines Tages für die Wochenreihe im Trainingsabschluss. */
-export function dayState(date: ISODate, today: ISODate, doneDates: Set<ISODate>, plannedWeekdays: number[]): DayState {
-  const planned = plannedWeekdays.includes(weekdayIndex(date))
+export function dayState(date: ISODate, today: ISODate, doneDates: Set<ISODate>): DayState {
   if (doneDates.has(date)) return date === today ? 'today' : 'done'
-  if (date > today) return planned ? 'future' : 'rest'
-  if (date === today) return planned ? 'future' : 'rest'
-  return planned ? 'missed' : 'rest'
+  if (date > today) return 'future'
+  return 'rest'
 }

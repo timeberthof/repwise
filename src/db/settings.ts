@@ -1,28 +1,25 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, kvGet, kvSet } from './db'
 
-/** App-Einstellungen (in der kv-Tabelle unter „settings“). */
+/** App-Einstellungen (in der kv-Tabelle unter „settings“). Ältere Felder (z. B. Schritte) bleiben dort unbeachtet. */
 export interface AppSettings {
-  /** Beim Öffnen nach den Schritten von gestern fragen */
-  askSteps: boolean
-  stepGoal: number
-  /** In-App-Hinweise einzeln an/aus */
+  /** In-App-Hinweise */
   hints: {
-    zyklus: boolean
-    schritte: boolean
     backup: boolean
-    gewicht: boolean
-    training: boolean
   }
   /** Erinnerung an ein Backup nach so vielen Tagen */
   backupDays: number
+  /** Pausentimer nach jedem eingetragenen Satz starten */
+  restTimer: boolean
+  /** Pausendauer in Sekunden (je Übung über ⚙ änderbar) */
+  restSec: number
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  askSteps: true,
-  stepGoal: 8000,
-  hints: { zyklus: true, schritte: true, backup: true, gewicht: true, training: true },
+  hints: { backup: true },
   backupDays: 14,
+  restTimer: true,
+  restSec: 120,
 }
 
 function merge(s: Partial<AppSettings> | null): AppSettings {

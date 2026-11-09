@@ -1,6 +1,5 @@
 import { BACKUP_TABLES, db, kvSet } from '../db/db'
 import { setCustomExercises } from '../data/exercises'
-import { loadWeightSteps } from '../db/repo/weights'
 import { today } from '../logic/dates'
 
 /**
@@ -175,10 +174,9 @@ export async function restoreBackup(data: BackupFile): Promise<void> {
   })
   await markBackupDone()
   setCustomExercises(await db.customExercises.toArray())
-  await loadWeightSteps()
-  // Pläne aus älteren Backups an die aktuellen Trainingsregeln anpassen (Verlauf bleibt unverändert)
-  const { migratePlanRules } = await import('../db/repo/migrate')
-  await migratePlanRules()
+  // Ältere Backups: bisherigen Plan einmalig als Vorlagen übernehmen (Verlauf bleibt unverändert)
+  const { migrateToErfassung } = await import('../db/repo/migrate')
+  await migrateToErfassung()
 }
 
 /** Alle Daten löschen (Datenbank und lokale Zwischenspeicher). */
@@ -192,7 +190,6 @@ export async function wipeAllData(): Promise<void> {
     /* ignorieren */
   }
   setCustomExercises([])
-  await loadWeightSteps()
 }
 
 export const TABLE_LABELS: Record<TableName, string> = {
@@ -212,4 +209,6 @@ export const TABLE_LABELS: Record<TableName, string> = {
   customExercises: 'Eigene Übungen',
   exerciseSettings: 'Übungs-Einstellungen',
   kv: 'Einstellungen',
+  templates: 'Trainingsvorlagen',
+  checkins: 'Wöchentliche Check-ins',
 }

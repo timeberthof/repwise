@@ -10,11 +10,11 @@ const OnboardingFlow = lazy(() => import('./features/onboarding/OnboardingFlow')
 const WorkoutScreen = lazy(() => import('./features/workout/WorkoutScreen'))
 const SummaryScreen = lazy(() => import('./features/workout/SummaryScreen'))
 const ExerciseStatScreen = lazy(() => import('./features/statistik/ExerciseStatScreen'))
-const ZyklusPage = lazy(() => import('./features/zyklus/ZyklusPage'))
-const ZyklusPlanen = lazy(() => import('./features/zyklus/ZyklusPlanen'))
 const VerlaufPage = lazy(() => import('./features/verlauf/VerlaufPage'))
 const SessionDetailScreen = lazy(() => import('./features/verlauf/SessionDetailScreen'))
-const PreviewScreen = lazy(() => import('./features/training/PreviewScreen'))
+const ExercisesPage = lazy(() => import('./features/exercises/ExercisesPage'))
+const TemplatesPage = lazy(() => import('./features/templates/TemplatesPage'))
+const TemplateEditor = lazy(() => import('./features/templates/TemplateEditor'))
 const CardioForm = lazy(() => import('./features/cardio/CardioForm'))
 
 /** Startseite: ohne abgeschlossenes Onboarding → Onboarding, sonst Dashboard. */
@@ -37,11 +37,11 @@ export function App() {
             <Route path="/workout/:id" element={<WorkoutScreen />} />
             <Route path="/workout/:id/abschluss" element={<SummaryScreen />} />
             <Route path="/statistik/uebung/:id" element={<ExerciseStatScreen />} />
-            <Route path="/zyklus" element={<ZyklusPage />} />
-            <Route path="/zyklus/planen" element={<ZyklusPlanen />} />
             <Route path="/verlauf" element={<VerlaufPage />} />
             <Route path="/verlauf/:id" element={<SessionDetailScreen />} />
-            <Route path="/vorschau/:date/:dayId" element={<PreviewScreen />} />
+            <Route path="/uebungen" element={<ExercisesPage />} />
+            <Route path="/vorlagen" element={<TemplatesPage />} />
+            <Route path="/vorlagen/:id" element={<TemplateEditor />} />
             <Route path="/cardio/neu" element={<CardioForm />} />
             <Route path="/cardio/:id" element={<CardioForm />} />
             <Route path="/:tab" element={<TabsLayout />} />

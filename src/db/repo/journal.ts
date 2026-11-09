@@ -1,9 +1,8 @@
 import { db } from '../db'
-import type { Adjustment, AdjustmentKind, CardioEntry, ISODate, Session, SessionExercise, SetEntry } from '../types'
+import type { CardioEntry, ISODate, Session, SessionExercise, SetEntry } from '../types'
 import { sessionE1rm } from '../../logic/e1rm'
 import { getExercise } from '../../data/exercises'
-import { formatDate, today } from '../../logic/dates'
-import { fmt } from '../../logic/format'
+import { addSet, updateSet, type SetValues } from './sessions'
 
 export type HistoryItem =
   | { type: 'training'; date: ISODate; session: Session; minutes: number | null; exercises: number; sets: number; volume: number; names: string[] }
@@ -39,7 +38,6 @@ export async function historyList(): Promise<HistoryItem[]> {
 export interface SessionDetail {
   session: Session
   exercises: (SessionExercise & { setList: SetEntry[] })[]
-  adjustments: Adjustment[]
   /** Importierte Einheit: Maximalkraft-Werte dieses Tages */
   imported: { exerciseId: string; e1rm: number }[]
 }
@@ -50,9 +48,8 @@ export async function sessionDetail(sessionId: number): Promise<SessionDetail | 
   const ses = await db.sessionExercises.where('sessionId').equals(sessionId).sortBy('order')
   const exercises = []
   for (const se of ses) exercises.push({ ...se, setList: await db.sets.where('sessionExerciseId').equals(se.id!).sortBy('index') })
-  const adjustments = (await db.adjustments.where('sessionId').equals(sessionId).toArray()).sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
   const imported = session.imported ? (await db.strength.where('date').equals(session.date).filter((p) => p.source === 'mci').toArray()).map((p) => ({ exerciseId: p.exerciseId, e1rm: p.e1rm })) : []
-  return { session, exercises, adjustments, imported }
+  return { session, exercises, imported }
 }
 
 /** Maximalkraft-Werte einer Einheit nach Änderungen neu berechnen. */
@@ -66,36 +63,20 @@ export async function recalcSessionStrength(sessionId: number) {
   }
 }
 
-const setText = (x: { reps: number; weight: number | null; rir: number | null }) => `${x.reps} × ${x.weight ? `${fmt(x.weight)} kg` : 'KG'}${x.rir !== null ? ` (RIR ${x.rir})` : ''}`
-
-/** Satz nachträglich ändern (wird protokolliert). */
-export async function editSet(setId: number, values: { reps: number; weight: number | null; rir: number | null }) {
+/** Satz nachträglich ändern. */
+export async function editSet(setId: number, values: SetValues) {
   const old = await db.sets.get(setId)
   if (!old) return
-  await db.sets.update(setId, { ...values, done: true })
-  const s = await db.sessions.get(old.sessionId)
-  await db.adjustments.add({
-    date: today(),
-    sessionId: old.sessionId,
-    exerciseId: old.exerciseId,
-    kind: 'manuell',
-    field: 'reps',
-    before: null,
-    after: null,
-    title: 'Satz nachträglich geändert',
-    reason: `${getExercise(old.exerciseId)?.name ?? ''}, Training vom ${s ? formatDate(s.date) : '?'}: Satz ${old.index + 1} ${setText(old)} → ${setText(values)}`,
-  })
+  await updateSet(setId, values)
   await recalcSessionStrength(old.sessionId)
 }
 
-export async function addSetAfter(sessionExerciseId: number) {
+/** Satz nachträglich hinzufügen (Werte trägst Du selbst ein, nichts wird vorausgefüllt). */
+export async function addSetTo(sessionExerciseId: number, values: SetValues) {
   const se = await db.sessionExercises.get(sessionExerciseId)
-  const s = se ? await db.sessions.get(se.sessionId) : undefined
-  if (!se || !s) return
-  const sets = await db.sets.where('sessionExerciseId').equals(sessionExerciseId).sortBy('index')
-  const last = sets.at(-1)
-  await db.sets.add({ sessionId: s.id!, sessionExerciseId, exerciseId: se.exerciseId, date: s.date, index: sets.length, weight: last?.weight ?? se.weight, reps: last?.reps ?? se.repMin, rir: last?.rir ?? se.targetRir, done: true, doneAt: Date.now() })
-  await recalcSessionStrength(s.id!)
+  if (!se) return
+  await addSet(sessionExerciseId, values)
+  await recalcSessionStrength(se.sessionId)
 }
 
 export async function deleteSet(setId: number) {
@@ -116,23 +97,4 @@ export async function deleteSessionCompletely(sessionId: number) {
     await db.adjustments.where('sessionId').equals(sessionId).delete()
     await db.sessions.delete(sessionId)
   })
-}
-
-export const ADJUSTMENT_KINDS: { id: AdjustmentKind; label: string; auto: boolean }[] = [
-  { id: 'progression', label: 'Steigerung', auto: true },
-  { id: 'reduktion', label: 'Reduktion', auto: true },
-  { id: 'stagnation', label: 'Stagnation', auto: true },
-  { id: 'wochentyp', label: 'Wochentyp', auto: true },
-  { id: 'erholung', label: 'Erholung', auto: true },
-  { id: 'muskelkater', label: 'Muskelkater', auto: true },
-  { id: 'pause', label: 'Trainingspause', auto: true },
-  { id: 'kalibrierung', label: 'Kalibrierung', auto: true },
-  { id: 'tausch', label: 'Übungstausch', auto: false },
-  { id: 'manuell', label: 'Manuell', auto: false },
-  { id: 'plan', label: 'Plan', auto: true },
-  { id: 'variante', label: 'Variante', auto: true },
-]
-
-export async function adjustmentLog(): Promise<Adjustment[]> {
-  return (await db.adjustments.toArray()).sort((a, b) => b.date.localeCompare(a.date) || (b.id ?? 0) - (a.id ?? 0))
 }

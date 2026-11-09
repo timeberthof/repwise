@@ -177,12 +177,6 @@ export default function ExerciseStatScreen() {
               {x.e1rm ? `Ø 1RM ${fmt(x.e1rm, 1)} kg` : ''}
               {x.volume ? ` · Volumen ${fmt(x.volume)} kg` : ''}
             </p>
-            {x.notes.filter((n) => n.kind !== 'wochentyp').slice(0, 2).map((n, j) => (
-              <p key={j} className="mt-1 flex items-start gap-1 text-[13px] text-amber">
-                <Icon name="wand" size={14} gradient={['#f3af3d', '#ed774d']} className="mt-[2px]" />
-                {n.reason}
-              </p>
-            ))}
           </button>
         ))}
         {all && !last.length && <p className="py-6 text-center text-body text-fg-2">Keine Einheiten im Zeitraum.</p>}

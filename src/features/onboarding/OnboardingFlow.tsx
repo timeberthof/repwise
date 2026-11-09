@@ -1,248 +1,110 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { FlowLayout, InfoCard } from '../flow/FlowLayout'
-import { GoalChart, GoalOptions, recommendedGoals } from '../flow/steps/GoalStep'
-import { ActivityOptions, ExperienceOptions, FrequencyOptions, LocationOptions, SplitOptions } from '../flow/steps/ChoiceSteps'
-import { WeekPlanEditor } from '../flow/steps/WeekPlanStep'
-import { BodyDataEditor, BodyFatEditor, CaloriesResult, estimateBodyFat } from '../flow/steps/BodySteps'
-import { FocusEditor } from '../flow/steps/FocusStep'
-import { ExcludeEditor, PainEditor } from '../flow/steps/RestrictionSteps'
-import { StartwerteReview } from '../flow/steps/StartwerteStep'
-import { CycleStrip, PlanProgress, PlanSummaryList } from '../flow/steps/CreatePlanStep'
+import { BodyDataEditor } from '../flow/steps/BodySteps'
 import { Button } from '../../components/ui/Button'
+import { Toggle } from '../../components/ui/Toggle'
 import { loadBundledStartwerte, profileDefaults, type Startwerte } from '../../db/repo/startwerte'
-import { loadPlanDays, planReport, type PlanDayWithExercises } from '../../db/repo/plan'
-import { PlanVolumeSummary } from '../flow/steps/PlanVolumeSummary'
 import { db } from '../../db/db'
-import { ageOn, formatDate, formatLong } from '../../logic/dates'
+import { formatDate } from '../../logic/dates'
 import { useToast } from '../../components/ui/Toast'
 import { useImportFile } from '../settings/BackupImport'
-import { calculateCalories } from '../../logic/calories'
-import { defaultWeekdays, recommendedSplits } from '../../logic/planGenerator'
 import { emptyDraft, finishOnboarding, type Draft } from './draft'
 
-const STEPS = [
-  'willkommen',
-  'ziel',
-  'erfahrung',
-  'haeufigkeit',
-  'split',
-  'woche',
-  'ort',
-  'koerper',
-  'koerperfett',
-  'aktivitaet',
-  'kalorien',
-  'fokus',
-  'schmerzen',
-  'ausschluesse',
-  'startwerte',
-  'erstellen',
-  'plan',
-] as const
+const STEPS = ['willkommen', 'koerper', 'fertig'] as const
 
+/** Kurzes Onboarding: Begrüßung (mit Datenimport), Körperdaten, so funktioniert Repwise. Es wird kein Plan erstellt. */
 export default function OnboardingFlow() {
   const navigate = useNavigate()
   const toast = useToast()
   const [step, setStep] = useState(0)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [startwerte, setStartwerte] = useState<Startwerte | null>(null)
-  const [planDays, setPlanDays] = useState<PlanDayWithExercises[]>([])
-  const [planStart, setPlanStart] = useState('')
-  const [volume, setVolume] = useState<Awaited<ReturnType<typeof planReport>> | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [useStartwerte, setUseStartwerte] = useState(false)
+  const [busy, setBusy] = useState(false)
 
   // Vorbelegung: bestehendes Profil oder Startwerte
   useEffect(() => {
     ;(async () => {
       const s = await loadBundledStartwerte()
       setStartwerte(s)
+      setUseStartwerte(!!s)
       const existing = await db.profile.get('me')
-      const weights = await db.body.where('kind').equals('weight').sortBy('date')
-      const fats = await db.body.where('kind').equals('bodyfat').sortBy('date')
-      const base = existing ?? (s ? { ...profileDefaults(s), onboardingDone: false, createdAt: Date.now() } : null)
-      const sWeight = s?.koerper.gewicht.at(-1)?.wert
-      const sFat = s?.koerper.koerperfett.at(-1)?.wert
-      setDraft(emptyDraft(base, weights.at(-1)?.value ?? sWeight ?? 80, fats.at(-1)?.value ?? sFat ?? null, !!s))
+      setDraft(emptyDraft(existing ?? (s ? profileDefaults(s) : null)))
     })()
   }, [])
 
-  // Startwerte als Datei laden (veröffentlichte App ohne eingebaute Startwerte). Am Anfang füllen sie auch das Profil vor.
+  // Startwerte als Datei laden (veröffentlichte App ohne eingebaute Startwerte); ein Backup wird wiederhergestellt.
   const importFile = useImportFile({
     onStartwerte: (s) => {
       setStartwerte(s)
-      if (step === 0) {
-        const fat = s.koerper.koerperfett?.at(-1)?.wert ?? null
-        setDraft((d) => emptyDraft({ ...profileDefaults(s), onboardingDone: false, createdAt: Date.now() }, s.koerper.gewicht.at(-1)?.wert ?? d?.weight ?? 80, fat, true))
-      } else setDraft((d) => (d ? { ...d, useStartwerte: true } : d))
-      toast('Startwerte geladen', `Stand ${formatDate(s.stand)} · ${Object.keys(s.maximalkraft).length} Übungen${step === 0 ? ' · Angaben vorausgefüllt' : ''}`)
+      setUseStartwerte(true)
+      setDraft(emptyDraft(profileDefaults(s)))
+      toast('Startwerte geladen', `Stand ${formatDate(s.stand)} · Angaben vorausgefüllt`)
     },
   })
-
-  const set = useCallback((patch: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...patch } : d)), [])
-  const next = () => setStep((s) => Math.min(STEPS.length - 1, s + 1))
-  const back = () => setStep((s) => Math.max(0, s - 1))
-
-  const calories = useMemo(
-    () => (draft ? calculateCalories({ sex: draft.sex, weightKg: draft.weight, heightCm: draft.heightCm, age: ageOn(draft.birthDate), activity: draft.activity, goal: draft.goal }) : null),
-    [draft],
-  )
-
-  const create = useCallback(async () => {
-    if (!draft) return
-    try {
-      const planId = await finishOnboarding(draft, draft.useStartwerte ? startwerte : null)
-      const plan = await db.plans.get(planId)
-      setPlanStart(plan?.startDate ?? '')
-      setPlanDays(await loadPlanDays(planId))
-      const profile = await db.profile.get('me')
-      if (profile) setVolume(await planReport(planId, profile))
-      setStep(STEPS.indexOf('plan'))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }, [draft, startwerte])
 
   if (!draft) return <div className="h-dvh bg-bg" />
 
   const id = STEPS[step]
+  const next = () => setStep((s) => Math.min(STEPS.length - 1, s + 1))
+  const back = () => setStep((s) => Math.max(0, s - 1))
   const common = { step, total: STEPS.length, onBack: step > 0 ? back : undefined, onNext: next }
-  const estimate = estimateBodyFat(draft.weight, draft.heightCm, ageOn(draft.birthDate), draft.sex)
+
+  const finish = async () => {
+    setBusy(true)
+    try {
+      await finishOnboarding(draft, useStartwerte ? startwerte : null)
+      navigate('/training', { replace: true })
+    } catch (e) {
+      toast('Speichern fehlgeschlagen', e instanceof Error ? e.message : String(e))
+      setBusy(false)
+    }
+  }
 
   switch (id) {
     case 'willkommen':
       return (
-        <FlowLayout {...common} title="Willkommen bei Repwise!" subtitle="In wenigen Schritten erstellen wir Deinen persönlichen Trainingsplan.">
+        <FlowLayout {...common} title="Willkommen bei Repwise!" subtitle="Dein Trainingstagebuch: Du trägst ein, was Du trainierst – Repwise zeigt Dir Verlauf und Fortschritt.">
           <div className="mt-5">
             <Button variant="secondary" icon="upload" onClick={importFile.open}>
               {startwerte ? 'Backup wiederherstellen' : 'Daten importieren'}
             </Button>
             <p className="mt-2 px-1 text-[13.5px] leading-snug text-fg-2">
-              {startwerte ? `✓ Startwerte geladen (Stand ${formatDate(startwerte.stand)}). Neu installiert? Dann Dein Backup laden.` : 'Optional: Startwerte-Datei oder Repwise-Backup aus der Dateien-App laden – sonst einfach weiter.'}
+              {startwerte ? `✓ Startwerte geladen (Stand ${formatDate(startwerte.stand)}). Neu installiert? Dann Dein Backup laden.` : 'Optional: Repwise-Backup oder Startwerte-Datei aus der Dateien-App laden – sonst einfach weiter.'}
             </p>
           </div>
           <div className="mt-auto flex flex-col gap-[14px] pb-4 pt-5">
-            <InfoCard icon="barChart" title="Dein Training passt sich an." text="Nach jeder Einheit werden Gewichte, Sätze und Wiederholungen automatisch angepasst – mit kurzer Begründung." />
-            <InfoCard icon="calendar" title="Mesozyklen von 6 Wochen" text="Intro, Normal, Overreaching, Peak Week und Deload wechseln sich automatisch ab." />
+            <InfoCard icon="edit" title="Du bestimmst." text="Übungen, Gewichte und Wiederholungen trägst Du selbst ein. Repwise gibt nichts vor." />
+            <InfoCard icon="trendingUp" title="Verlauf und Fortschritt" text="Diagramme pro Übung, Körpergewicht und Fortschrittsfotos." />
             <InfoCard icon="lock" title="Alles bleibt auf Deinem iPhone." text="Repwise speichert alle Daten nur lokal und funktioniert komplett offline." />
           </div>
           {importFile.element}
         </FlowLayout>
       )
-    case 'ziel':
-      return (
-        <FlowLayout {...common} title="Was strebst Du an?">
-          <GoalChart goal={draft.goal} />
-          <GoalOptions value={draft.goal} onChange={(goal) => set({ goal })} recommended={recommendedGoals(draft.bodyFat, draft.sex)} />
-        </FlowLayout>
-      )
-    case 'erfahrung':
-      return (
-        <FlowLayout {...common} title="Wie erfahren bist Du?" subtitle="Danach richtet sich das Volumen Deines Plans.">
-          <ExperienceOptions value={draft.experience} onChange={(experience) => set({ experience })} />
-        </FlowLayout>
-      )
-    case 'haeufigkeit':
-      return (
-        <FlowLayout {...common} title="Wie oft möchtest Du trainieren?" legend>
-          <FrequencyOptions
-            value={draft.daysPerWeek}
-            experience={draft.experience}
-            onChange={(n) => {
-              const rec = recommendedSplits(n)
-              set({ daysPerWeek: n, weekdays: draft.weekdays.length === n ? draft.weekdays : defaultWeekdays(n), split: rec.includes(draft.split) ? draft.split : rec[0] })
-            }}
-          />
-        </FlowLayout>
-      )
-    case 'split':
-      return (
-        <FlowLayout {...common} title="Wähle Deinen Trainingssplit" legend>
-          <SplitOptions value={draft.split} days={draft.daysPerWeek} onChange={(split) => set({ split })} />
-        </FlowLayout>
-      )
-    case 'woche':
-      return (
-        <FlowLayout {...common} title="Deine Wochenplanung" subtitle="Verschiebe Deine Trainings und passe Deinen Trainingsplan an.">
-          <WeekPlanEditor split={draft.split} weekdays={draft.weekdays} onWeekdays={(weekdays) => set({ weekdays })} minutes={draft.sessionMinutes} onMinutes={(sessionMinutes) => set({ sessionMinutes })} experience={draft.experience} />
-        </FlowLayout>
-      )
-    case 'ort':
-      return (
-        <FlowLayout {...common} title="Wo trainierst Du?" subtitle="Repwise wählt nur Übungen für Dein verfügbares Equipment.">
-          <LocationOptions location={draft.location} equipment={draft.equipment} onChange={(location, equipment) => set({ location, equipment })} />
-        </FlowLayout>
-      )
     case 'koerper':
       return (
-        <FlowLayout {...common} title="Deine Körperdaten" subtitle="Das Alter wird aus dem Geburtsdatum berechnet. Gewicht kannst Du später jederzeit aktualisieren.">
-          <BodyDataEditor sex={draft.sex} birthDate={draft.birthDate} heightCm={draft.heightCm} weight={draft.weight} onChange={(p) => set(p)} />
+        <FlowLayout {...common} title="Deine Körperdaten" subtitle="Das Alter wird aus dem Geburtsdatum berechnet. Das Gewicht fragt der wöchentliche Check-in ab.">
+          <BodyDataEditor sex={draft.sex} birthDate={draft.birthDate} heightCm={draft.heightCm} onChange={(p) => setDraft({ ...draft, ...p })} />
         </FlowLayout>
       )
-    case 'koerperfett':
+    case 'fertig':
       return (
-        <FlowLayout {...common} title="Dein Körperfettanteil" subtitle="Dieser Wert hat Einfluss auf Deine Ziel-Empfehlung.">
-          <BodyFatEditor value={draft.bodyFat ?? estimate} onChange={(bodyFat) => set({ bodyFat })} estimate={estimate} sex={draft.sex} />
-        </FlowLayout>
-      )
-    case 'aktivitaet':
-      return (
-        <FlowLayout {...common} title="Wie aktiv bist Du im Alltag?" subtitle="Ohne das Training – für Deinen Kalorienbedarf.">
-          <ActivityOptions value={draft.activity} onChange={(activity) => set({ activity })} work={draft.workPosition} onWork={(workPosition) => set({ workPosition })} />
-        </FlowLayout>
-      )
-    case 'kalorien':
-      return (
-        <FlowLayout {...common} title="Dein Kalorienbedarf" subtitle="Berechnet aus Deinen Angaben und Deinem Ziel.">
-          {calories && <CaloriesResult result={calories} />}
-        </FlowLayout>
-      )
-    case 'fokus':
-      return (
-        <FlowLayout {...common} title="Deine Schwerpunkte" subtitle="Welche Muskelgruppen sollen mehr Aufmerksamkeit bekommen?">
-          <FocusEditor value={draft.focus} onChange={(focus) => set({ focus })} />
-        </FlowLayout>
-      )
-    case 'schmerzen':
-      return (
-        <FlowLayout {...common} title="Hast Du Schmerzen?" subtitle="Ab Stärke 5 meidet Repwise Übungen, die das Gelenk belasten, und plant passende Mobility-Übungen ein.">
-          <PainEditor value={draft.pains} onChange={(pains) => set({ pains })} />
-        </FlowLayout>
-      )
-    case 'ausschluesse':
-      return (
-        <FlowLayout {...common} title="Übungen ausschließen" subtitle="Übungen, die Du nicht machen willst oder kannst, kommen nicht in Deinen Plan.">
-          <ExcludeEditor value={draft.excluded} onChange={(excluded) => set({ excluded })} />
-        </FlowLayout>
-      )
-    case 'startwerte':
-      return (
-        <FlowLayout {...common} title="Deine Startwerte" subtitle="Übernommen aus Deiner bisherigen App – Ausgangspunkt für Verlauf, Diagramme und automatische Anpassung.">
-          <StartwerteReview data={startwerte} use={draft.useStartwerte} onUse={(useStartwerte) => set({ useStartwerte })} onLoad={importFile.open} />
-          {importFile.element}
-        </FlowLayout>
-      )
-    case 'erstellen':
-      return (
-        <FlowLayout {...common} title="Dein Trainingsplan wird erstellt…" nextLabel="Meinen Trainingsplan erstellen" nextDisabled>
-          {error ? <p className="mt-10 text-danger">{error}</p> : <PlanProgress labels={['Analyse Deiner Angaben', 'Auswahl der Übungen', 'Berücksichtigung Deiner Präferenzen']} onDone={create} />}
-        </FlowLayout>
-      )
-    case 'plan':
-      return (
-        <FlowLayout step={step} total={STEPS.length} title="Dein Trainingsplan" subtitle={planStart ? `Startet am ${formatLong(planStart)} · 6-Wochen-Zyklus` : undefined} hideButton>
-          <CycleStrip />
-          <PlanSummaryList days={planDays} />
-          {volume && (
-            <div className="mt-6">
-              <p className="mb-2 text-section font-semibold uppercase tracking-[0.06em] text-fg-2">Sätze pro Muskelgruppe und Woche</p>
-              <PlanVolumeSummary report={volume.report} suggestion={volume.suggestion} impossibleReason="keine passende Übung (Schmerzen, Equipment oder Ausschlüsse)" />
-              {volume.suggestion && <p className="mt-2 px-1 text-[13px] text-fg-2">Ändern kannst Du das jederzeit unter Einstellungen → Trainingsplan.</p>}
-            </div>
-          )}
-          <div className="sticky bottom-0 -mx-5 mt-6 bg-gradient-to-t from-black via-black/95 to-transparent px-5 pt-6" style={{ paddingBottom: 'max(var(--safe-bottom), 16px)' }}>
-            <Button onClick={() => navigate('/training', { replace: true })}>Los geht's</Button>
+        <FlowLayout {...common} title="So funktioniert Repwise" nextLabel={busy ? 'Speichert…' : "Los geht's"} nextDisabled={busy} onNext={finish}>
+          <div className="mt-2 flex flex-col gap-[14px]">
+            <InfoCard icon="bookmark" title="1. Vorlagen anlegen" text="Unter Training → Bearbeiten legst Du Vorlagen an, z. B. Push und Pull – oder Du startest ein leeres Training." />
+            <InfoCard icon="dumbbell" title="2. Sätze eintragen" text="Pro Satz Gewicht und Wiederholungen, RIR optional. Zur Orientierung siehst Du, was Du beim letzten Mal gemacht hast." />
+            <InfoCard icon="scale" title="3. Wöchentlicher Check-in" text="Einmal pro Woche Körpergewicht und Fortschrittsfoto – im Tab „Körper“ siehst Du den Verlauf." />
           </div>
+          {startwerte && (
+            <label className="mt-6 flex items-center gap-3 rounded-xl bg-surface px-4 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[16px] font-semibold">Startwerte übernehmen</span>
+                <span className="block text-[13px] text-fg-2">Werte aus Deiner bisherigen App (Stand {formatDate(startwerte.stand)}) als Ausgangspunkt für Verlauf und Diagramme.</span>
+              </span>
+              <Toggle checked={useStartwerte} onChange={setUseStartwerte} label="Startwerte übernehmen" />
+            </label>
+          )}
         </FlowLayout>
       )
   }

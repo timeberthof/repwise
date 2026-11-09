@@ -182,3 +182,28 @@ Ziel: gleichmäßiger Muskelaufbau aller Muskelgruppen, höchstens 7 Übungen pr
 - Datenmodell: `Exercise.rolle`, `PlanExercise.role/anchor/variants/pinned`, `SessionExercise.planExerciseId/role/targetReps`, `Plan.rulesVersion`, Protokoll-Art „Variante“. Alles optional, ohne neue Indizes → keine Dexie-Schemaänderung nötig.
 - **Migration** (`src/db/repo/migrate.ts`): beim App-Start und nach jedem Backup-Import für aktive Pläne mit `rulesVersion` < 2. Eigene Übungen bleiben, wo es geht; Kürzen und Ausgleich wie oben; Plantage behalten ihre IDs. Der Verlauf (Einheiten, Sätze, Maximalkraft, Protokoll) bleibt unverändert; nur noch nicht begonnene zukünftige Einheiten werden neu angelegt. Eintrag im Anpassungsprotokoll mit allen Änderungen.
 - **Alte Backups** (Format 1) bleiben importierbar; der Plan wird beim Import migriert. Das Backup-Format bleibt Version 1 (neue Felder sind optional).
+
+## Umbau: Erfassen statt Vorgeben (09.11.2026)
+
+Auftrag: Kalorienrechner, Schritte und alle Vorschläge entfernen; Training selbst erfassen; wöchentlicher Check-in mit Gewicht und Foto; eigene Ansicht „Körper“. Alle bisherigen Trainingsdaten bleiben erhalten.
+
+| Thema | Entscheidung |
+|---|---|
+| Datensicherheit | Git-Tag `vor-umbau-erfassung` auf dem letzten veröffentlichten Stand. Datenbank v3 **fügt nur Tabellen hinzu** (`templates`, `checkins`); keine Tabelle wird gelöscht. Pläne, Anpassungsprotokoll, Schritte und alte Check-ins bleiben in der Datenbank und im Backup, werden aber nicht mehr angezeigt. |
+| Migration | `migrateToErfassung()` (einmalig, Kennzeichen `migration.erfassung`, auch nach Backup-Import): Trainingstage des bisherigen Plans werden zu eigenen Vorlagen (je Name die erste Einheit, z. B. „Push“, „Pull“). Es wird nichts gelöscht. Gewichtswerte liegen schon in `body` → keine Migration nötig. |
+| Übungsliste | Nur „Meine Übungen“: schon trainierte, selbst angelegte und in Vorlagen genutzte Kraftübungen. Neue Übung: Name, Muskelgruppe (inkl. „Ohne Muskelgruppe“), Notiz. Bearbeiten einer mitgelieferten Übung speichert eine eigene Fassung mit derselben ID (Verlauf bleibt verknüpft). |
+| Übung löschen | Mit Verlauf: nur ausblenden (Sätze, Maximalkraft, Diagramme bleiben). Ohne Verlauf: entfernen. Immer aus allen Vorlagen entfernt. |
+| Training starten | Aus eigenen Vorlagen (nur Übungsliste, keine Zielwerte) oder „Leeres Training“. Laufendes Training wird fortgesetzt statt ein zweites zu starten. |
+| Satz-Eingabe | kg + Wdh., RIR optional. Felder sind leer; „Wie Satz n“ übernimmt den eigenen vorigen Satz (keine Vorgabe). Eingetragene Sätze direkt änderbar und löschbar. Maximalkraft ohne RIR rechnet mit RIR 0. |
+| „Letztes Mal“ | Reine Info: Sätze aus dem letzten abgeschlossenen Training dieser Übung; sonst das Arbeitsgewicht aus der bisherigen App. |
+| Training beenden | Übungen ohne Satz und nicht erledigte Sätze (aus der alten Planung) werden entfernt; ein Training ganz ohne Satz wird verworfen. |
+| Pausentimer | Bleibt (CLAUDE.md), aber als Einstellung: an/aus, Dauer 60 s–4 min (Standard 2 min). Startet nach jedem eingetragenen Satz. |
+| Serie (Flamme) | Ohne Plan: Wochen in Folge mit mindestens einem Krafttraining; eine noch leere laufende Woche bricht sie nicht ab. |
+| Check-in fällig | Wenn es noch keinen gibt oder der letzte **mindestens 7 Tage** zurückliegt (Auslegung von „mehr als 7 Tage“: am selben Wochentag wieder). Erscheint beim Öffnen der App auf den Haupt-Tabs, nicht mitten im Training. |
+| Check-in Gewicht | Pflicht: Sheet lässt sich nicht wegwischen, „Weiter“ erst bei 20–400 kg. Ein zweiter Check-in am selben Tag ersetzt den ersten. Wert landet im bisherigen Gewichtsverlauf. |
+| Check-in Foto | Kamera oder Galerie, oder „Später“. Offen bleibt das Foto, bis es eins ab dem Check-in-Tag gibt (auch eins aus „Körper“ zählt); Abfrage einmal pro App-Start. |
+| Körper | Eigener Tab: Check-in-Status, Gewichtsverlauf (3 Monate / 1 Jahr / Alle, Einträge korrigierbar), Körperfett nur falls schon Werte vorhanden, Fotos nach Monat (neueste zuerst), Vorher/Nachher mit zwei wählbaren Daten. Differenzen neutral (ohne Grün/Rot-Bewertung). |
+| Cardio | Zielzonen-Vorschlag und „Standard-Zielzone“ entfernt. Die Zone wird aus dem Ø-Puls bestimmt (Pflichtfelder des Datenmodells bleiben gefüllt). Kalorien laut Garmin bleiben als erfasster Wert. |
+| Entfernt | Kalorienrechner, Schritte (Abfrage, Kachel, Statistik, Einstellungen), Zyklus/Plan-Erstellung, automatische Anpassung, Übungstausch-Vorschläge, Erholungs-Check-in vor dem Training, Anpassungsprotokoll-Ansicht, Ziele. |
+| Onboarding | Willkommen (mit Import) → Körperdaten → „So funktioniert Repwise“ (Startwerte übernehmen). Kein Plan. Gewicht fragt der Check-in ab. |
+| Datei-Auswahl | Gewählte Dateien (Fotos, Backups) werden sofort in den Speicher gelesen, bevor das Feld geleert wird – in WebKit war die Datei danach teils nicht mehr lesbar. |
